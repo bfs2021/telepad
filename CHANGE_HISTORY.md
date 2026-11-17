@@ -2,6 +2,12 @@
 
 Newest first.
 
+## [2026-11-17] — tested: #8 passes
+- Windows 11, release build, 65 real hosts (read-only): compact view by default; Group by
+  status → Down (16), Up (49); Detailed + grouped stored as `ui_compact_host_list=0`,
+  `ui_group_by_status=1` and restored after a restart. fmt, clippy, 62 tests, release
+  build; diff scanned.
+
 ## [2026-11-17] — feat(ui): compact host list, group by status (#8)
 - Host list: **Compact** view (default) — one line per host with the worst of CPU / RAM /
   disk on the right, details on hover — or the previous **Detailed** rows; optional

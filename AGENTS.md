@@ -172,4 +172,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #5 | fix(ui): host detail header buttons cut off on narrow windows | closed | 2026-11-17 |
 | #6 | fix(ui): "→" renders as a box in table headers | closed | 2026-11-17 |
 | #7 | fix(release): Windows .sha256 has CRLF | closed | 2026-11-17 |
-| #8 | feat(ui): compact host list for large inventories | ready-for-review | 2026-11-17 |
+| #8 | feat(ui): compact host list for large inventories | closed | 2026-11-17 |
