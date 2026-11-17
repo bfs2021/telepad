@@ -112,15 +112,25 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
         Msg::SelectAlias(alias) => {
             m.selected = m.hosts.iter().position(|h| h.entry.alias == alias);
         }
-        Msg::AddHost => d.editor = Some(Editor::new(HostEntry::new(""))),
+        Msg::AddHost => {
+            d.editor = Some(Editor::new(HostEntry::new("")));
+            fx.push(Effect::FindKeys);
+        }
         Msg::Edit(i) => {
             if let Some(h) = m.hosts.get(i) {
                 d.editor = Some(Editor::new(h.entry.clone()));
+                fx.push(Effect::FindKeys);
             }
         }
         Msg::Clone(i) => {
             if let Some(h) = m.hosts.get(i) {
                 d.editor = Some(Editor::clone_of(&h.entry));
+                fx.push(Effect::FindKeys);
+            }
+        }
+        Msg::KeysFound(keys) => {
+            if let Some(ed) = &mut d.editor {
+                ed.key_choices = keys;
             }
         }
         Msg::Delete(i) => {
@@ -155,7 +165,14 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
             }
         }
         Msg::EditorClose => d.editor = None,
-        Msg::EditorBrowseKey => fx.push(Effect::PickKeyFile),
+        Msg::EditorBrowseKey => {
+            let current = d
+                .editor
+                .as_ref()
+                .map(|e| e.identity.clone())
+                .unwrap_or_default();
+            fx.push(Effect::PickKeyFile(current));
+        }
         Msg::KeyPicked(p) => {
             if let Some(ed) = &mut d.editor {
                 ed.identity = p.display().to_string();

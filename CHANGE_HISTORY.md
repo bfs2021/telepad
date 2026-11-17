@@ -2,6 +2,18 @@
 
 Newest first.
 
+## [2026-11-17] — fix(ui): choosing an IdentityFile on macOS; key permission hint (#23)
+- Host editor: **Browse…** opens in the current key's folder or `~/.ssh` (hidden on
+  macOS/Linux, so it was unreachable from the home folder), with a Cmd+Shift+. hint; an arrow
+  next to the field lists the private keys in `~/.ssh` (`find_ssh_keys` reads only each
+  file's first line; `.pub`, `known_hosts`, `config`, PuTTY `.ppk` are skipped).
+- ssh's "UNPROTECTED PRIVATE KEY FILE … bad permissions" is now reported as
+  "private key … is readable by other users … run: chmod 600 <key>" instead of
+  "authentication failed" (reported on macOS with a 0644 key).
+- Verified on Windows: the editor's key list offered the four OpenSSH keys in `~/.ssh` and
+  skipped `.ppk`/`.pub`/text files; tests for key detection, the editor flow and the error
+  text. Not verified on a Mac: the macOS dialog starting in `~/.ssh`.
+
 ## [2026-11-17] — feat(ui): Telepad app icon (#21)
 - Original icon (rounded blue gradient square, white "T", green online dot) drawn by
   `scripts/make-icon.py`; `assets/icon/` holds PNG (256, 1024), `.ico` (16–256) and `.icns`.

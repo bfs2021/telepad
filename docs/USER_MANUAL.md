@@ -107,7 +107,7 @@ up the others. The window stays responsive while hosts load.
 | **Alias (Host)** | Name used in ssh and in Telepad: letters, digits, `.`, `_`, `-` |
 | **Description** | Free text shown under the name |
 | **HostName / IP** | Address to connect to (empty = the alias itself) |
-| **User**, **Port**, **IdentityFile** | As in an OpenSSH config; empty = ssh's defaults |
+| **User**, **Port**, **IdentityFile** | As in an OpenSSH config; empty = ssh's defaults. For IdentityFile, the arrow next to the field lists the private keys found in `~/.ssh`; **Browse…** opens in `~/.ssh` (on macOS press Cmd+Shift+. in the dialog to see other hidden folders); typing `~/.ssh/id_ed25519` works too |
 | **Access** | **SSH (monitored)** or **RDP only (Windows)** |
 | **Monitored** | Untick to keep a host in the list (for SSH/RDP buttons) without polling it |
 | **Other ssh options** | One `Keyword value` per line, e.g. `ProxyJump bastion` or `KexAlgorithms +diffie-hellman-group1-sha1` |
@@ -186,7 +186,8 @@ can turn the checks off or point them at a fork's repository.
 
 | Message | What to check |
 |---|---|
-| `authentication failed` | The key is not accepted or the host wants a password. Try `ssh <alias>` in a terminal; check IdentityFile and the server's `authorized_keys`. |
+| `authentication failed` | The key is not accepted or the host wants a password. Try `ssh <alias>` in a terminal; check IdentityFile and the server's `authorized_keys`. A key with a passphrase must be loaded in the ssh agent first (macOS: `ssh-add --apple-use-keychain ~/.ssh/id_ed25519`). |
+| `private key … is readable by other users` | ssh ignores private keys that others can read (common after copying keys from another computer). Run the `chmod 600 <key>` shown in the message, and `chmod 700 ~/.ssh`. |
 | `host key mismatch` | The host's key changed. Verify why, then remove the old line from `~/.ssh/known_hosts`. |
 | `connection timed out` + `(no ping reply)` | The host is down or unreachable from your network (VPN?). |
 | `connection timed out` + `(host answers ping …)` | The machine is up but SSH is blocked or not running. |
