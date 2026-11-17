@@ -2,6 +2,19 @@
 
 Newest first.
 
+## [2026-11-17] — feat(release): Windows installer alongside the portable zip (#10)
+- `installer/telepad.iss` (Inno Setup 6): per-user install to `%LOCALAPPDATA%\Programs\Telepad`
+  (no admin), Start-menu entry, optional desktop icon, uninstaller; data is kept.
+- Data folder: `--db` / `TELEPAD_DB` > next to `config` > next to the exe when portable
+  (`portable` marker, or an existing `telepad.db`) > per-user folder (`%APPDATA%\Telepad`,
+  `~/Library/Application Support/Telepad`, `~/.local/share/telepad`). Zips ship the marker,
+  so portable copies behave as before; `config` is also looked for in the data folder.
+- `package-windows.ps1 -Installer` builds `telepad-<ver>-windows-x86_64-setup.exe` (+ LF
+  `.sha256`); the release workflow installs Inno Setup, builds it, verifies every `.sha256`,
+  and smoke-tests a silent install → `telepad-check --help` → silent uninstall.
+- Verified locally: a copy with the marker created its database next to itself, a copy
+  without it in `%APPDATA%\Telepad` (test folder removed afterwards); zip contains `portable`.
+
 ## [2026-11-17] — feat(ui): overview cards, bigger Overview button, Add host in Hosts menu (#16)
 - Overview **Table | Cards** switch (saved as `ui_overview_cards`); cards wrap to the width,
   follow search and a **Sort by** picker (`Msg::SetSort`, `SortKey::ALL`).

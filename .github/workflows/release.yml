@@ -11,6 +11,7 @@ on:
     paths:
       - '.github/workflows/release.yml'
       - 'scripts/**'
+      - 'installer/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
 
@@ -51,10 +52,17 @@ jobs:
         if: matrix.target == ''
         run: cargo test --workspace --locked
 
+      - name: Inno Setup (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./scripts/package-windows.ps1
+        run: ./scripts/package-windows.ps1 -Installer
       - name: Package (macOS / Linux)
         if: runner.os != 'Windows'
         run: sh scripts/package-unix.sh ${{ matrix.target }}
@@ -66,17 +74,20 @@ jobs:
           zip=$(ls dist/telepad-*-${{ matrix.platform }}.zip)
           test -f "$zip.sha256"
           echo "$zip"
-          # The .sha256 must verify with the standard tools (LF line ending, no BOM).
-          if grep -q $'\r' "$zip.sha256"; then echo "CR in $zip.sha256"; exit 1; fi
-          if command -v sha256sum >/dev/null 2>&1; then
-            (cd dist && sha256sum -c "$(basename "$zip").sha256")
-          else
-            (cd dist && shasum -a 256 -c "$(basename "$zip").sha256")
-          fi
+          # Every .sha256 must verify with the standard tools (LF line ending, no BOM).
+          for sum in dist/telepad-*-${{ matrix.platform }}*.sha256; do
+            if grep -q $'\r' "$sum"; then echo "CR in $sum"; exit 1; fi
+            if command -v sha256sum >/dev/null 2>&1; then
+              (cd dist && sha256sum -c "$(basename "$sum")")
+            else
+              (cd dist && shasum -a 256 -c "$(basename "$sum")")
+            fi
+          done
           rm -rf /tmp/telepad-check-pkg && mkdir -p /tmp/telepad-check-pkg
           unzip -q "$zip" -d /tmp/telepad-check-pkg
           dir=$(ls -d /tmp/telepad-check-pkg/telepad-*)
           ls -l "$dir"
+          test -f "$dir/portable"   # zips are portable: data next to the program
           if [ "${{ runner.os }}" = Windows ]; then
             "$dir/telepad-check.exe" --help
           else
@@ -85,12 +96,32 @@ jobs:
             if [ -z "${{ matrix.target }}" ]; then "$dir/telepad-check" --help; fi
           fi
 
+      - name: Installer smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\telepad-*-windows-x86_64-setup.exe | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP 'telepad-install'
+          Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=$dir" -Wait
+          foreach ($f in 'telepad.exe', 'telepad-check.exe', 'README.txt', 'licenses\LICENSE-MIT') {
+            if (-not (Test-Path (Join-Path $dir $f))) { throw "installer did not install $f" }
+          }
+          if (Test-Path (Join-Path $dir 'portable')) { throw 'the installer must not ship the portable marker' }
+          & (Join-Path $dir 'telepad-check.exe') --help
+          if ($LASTEXITCODE -ne 0) { throw 'telepad-check failed after install' }
+          Start-Process (Join-Path $dir 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          Start-Sleep 5
+          if (Test-Path (Join-Path $dir 'telepad.exe')) { throw 'uninstall left telepad.exe behind' }
+          Write-Output "installed to $dir, ran telepad-check, uninstalled"
+
       - uses: actions/upload-artifact@v4
         with:
           name: telepad-${{ matrix.platform }}
           path: |
             dist/telepad-*-${{ matrix.platform }}.zip
             dist/telepad-*-${{ matrix.platform }}.zip.sha256
+            dist/telepad-*-${{ matrix.platform }}-setup.exe
+            dist/telepad-*-${{ matrix.platform }}-setup.exe.sha256
           if-no-files-found: error
 
   publish:

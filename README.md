@@ -23,6 +23,18 @@ Releases are built for Windows (x86_64), macOS (Apple silicon and Intel) and Lin
 
 ## Install
 
+### Windows (installer)
+
+1. Download `telepad-<version>-windows-x86_64-setup.exe` from
+   [Releases](https://github.com/yohannaftali/telepad/releases) and run it. It installs for
+   your user only (no administrator rights) to `%LOCALAPPDATA%\Programs\Telepad` and adds a
+   Start-menu entry; uninstall it in **Settings → Apps**.
+2. Start **Telepad** from the Start menu.
+
+Your hosts and settings live in `%APPDATA%\Telepad\telepad.db`, and uninstalling keeps
+them. To import an existing OpenSSH config on the first start, put it there as `config`, or
+use **☰ Hosts → Import ~/.ssh/config**.
+
 ### Windows (portable zip)
 
 1. Download `telepad-<version>-windows-x86_64.zip` from
@@ -32,12 +44,13 @@ Releases are built for Windows (x86_64), macOS (Apple silicon and Intel) and Lin
 2. Unzip it anywhere you can write to, for example `C:\Tools\telepad\`.
 3. Run `telepad.exe`.
 
-Nothing is installed in the system; delete the folder to remove Telepad. The database
-and generated ssh config are created next to the exe, so the folder must be writable
-(`Program Files` is not a good place). Updates arrive in the app itself
-([Updates](docs/USER_MANUAL.md#updates)).
+Nothing is installed in the system; delete the folder to remove Telepad. Because of the
+`portable` file in the zip, the database and generated ssh config are created next to the
+exe, so the folder must be writable
+(`Program Files` is not a good place).
 
-Windows may show a SmartScreen warning the first time because the exe is not code-signed:
+Both are updated from inside the app ([Updates](docs/USER_MANUAL.md#updates)). Windows may
+show a SmartScreen warning the first time because the files are not code-signed:
 choose **More info → Run anyway**.
 
 ### macOS

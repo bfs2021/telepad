@@ -211,8 +211,8 @@ is available and 2 when the check failed.
 
 | Setting | Where |
 |---|---|
-| Database | `--db <path>`, `TELEPAD_DB`, else `telepad.db` next to `config`, else next to the exe |
-| First-run import | `--config <path>`, `TELEPAD_CONFIG`, `./config`, or `config` next to the exe; only read while the database is empty |
+| Database | `--db <path>`, `TELEPAD_DB`, else `telepad.db` next to `config`, else next to the exe for a portable copy (`portable` file or an existing `telepad.db` there), else the per-user data folder: `%APPDATA%\Telepad`, `~/Library/Application Support/Telepad`, `~/.local/share/telepad` |
+| First-run import | `--config <path>`, `TELEPAD_CONFIG`, `./config`, `config` next to the exe, or `config` in the data folder; only read while the database is empty |
 | Generated ssh config | `telepad.ssh_config` next to the database (do not edit: rewritten on every change) |
 | Fallback key for hosts without IdentityFile | `SSH_IDENTITY_FILE=` in a `.env` file next to `config` |
 | ssh binary | `TELEPAD_SSH` (default: Windows `System32\OpenSSH\ssh.exe`, else `ssh` on `PATH`) |

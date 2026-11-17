@@ -134,7 +134,7 @@ in `update()` with a test → run the effect in `runtime.rs` → draw/emit it in
 
 | Item | Where |
 |---|---|
-| Host inventory | `telepad.db` next to `config` (else next to the exe) — or `--db <path>` / `TELEPAD_DB` |
+| Host inventory | `--db <path>` / `TELEPAD_DB`, else `telepad.db` next to `config`, else next to the exe when it is portable (`portable` marker or existing db), else `platform::user_data_dir()` (`lib.rs: data_dir`) |
 | First-run import source | `./config` (OpenSSH format) — or `--config <path>` / `TELEPAD_CONFIG`; only read while the DB is empty |
 | Generated ssh config | `telepad.ssh_config` next to the DB (do not edit; regenerated on every change) |
 | Fallback key for hosts without IdentityFile | `SSH_IDENTITY_FILE` in `.env` next to `config` |
@@ -174,3 +174,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #7 | fix(release): Windows .sha256 has CRLF | closed | 2026-11-17 |
 | #8 | feat(ui): compact host list for large inventories | closed | 2026-11-17 |
 | #16 | feat(ui): overview cards, bigger Overview button, Add host in menu | closed | 2026-11-17 |
+| #10 | feat(release): Windows installer alongside the portable zip | in-progress | 2026-11-17 |
