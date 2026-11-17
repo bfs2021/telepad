@@ -101,6 +101,7 @@ fn fatal_and_bad_update_settings_are_reported() {
             ui_prefs: UiPrefs {
                 compact_host_list: false,
                 group_by_status: true,
+                overview_cards: true,
             },
         },
         Instant::now(),
@@ -113,6 +114,7 @@ fn fatal_and_bad_update_settings_are_reported() {
         "remembered view settings applied"
     );
     assert!(s.drafts.group_by_status);
+    assert!(s.drafts.overview_cards);
 }
 
 #[test]
@@ -717,4 +719,26 @@ fn worst_usage_picks_the_highest_of_cpu_ram_and_disk() {
     let r = report(95.0, 10.0, None, 0);
     assert_eq!(worst_usage(&r).map(|w| w.0), Some("CPU"));
     assert_eq!(worst_usage(&HostReport::default()), None);
+}
+
+#[test]
+fn overview_card_view_is_saved_and_sort_can_be_picked() {
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    assert!(!s.drafts.overview_cards, "table by default");
+    let fx = update(&mut s, Msg::SetOverviewCards(true), t0);
+    assert!(matches!(&fx[..], [Effect::SaveUiPrefs(p)] if p.overview_cards && p.compact_host_list));
+    assert!(update(&mut s, Msg::SetOverviewCards(true), t0).is_empty());
+
+    let pick = Sort {
+        key: Some(SortKey::Disk),
+        descending: true,
+    };
+    assert!(
+        update(&mut s, Msg::SetSort(pick), t0).is_empty(),
+        "view-only, nothing saved"
+    );
+    assert_eq!(s.drafts.sort, pick);
+    assert_eq!(SortKey::ALL.len(), 11);
+    assert!(SortKey::ALL.iter().all(|k| !k.title().is_empty()));
 }

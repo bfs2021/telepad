@@ -18,16 +18,25 @@ pub fn top_bar(ui: &mut egui::Ui, m: &Model, d: &mut Drafts, out: &mut Vec<Msg>)
         ui.heading(il(icons::DATABASE, "Telepad"));
         ui.separator();
         ui.menu_button(il(icons::MENU, "Hosts"), |ui| {
-            for (icon, text, msg) in [
-                (icons::PLUS, "Add host…", Msg::AddHost),
-                (icons::IMPORT, "Import…", Msg::Import),
-                (icons::IMPORT, "Import ~/.ssh/config", Msg::ImportSshConfig),
-                (icons::EXPORT, "Export…", Msg::Export),
+            for (group, items) in [
+                ("Add", vec![(icons::PLUS, "Add one host…", Msg::AddHost)]),
+                (
+                    "Import",
+                    vec![
+                        (icons::IMPORT, "Import from a file…", Msg::Import),
+                        (icons::IMPORT, "Import ~/.ssh/config", Msg::ImportSshConfig),
+                    ],
+                ),
+                ("Export", vec![(icons::EXPORT, "Export…", Msg::Export)]),
             ] {
-                if ui.button(il(icon, text)).clicked() {
-                    out.push(msg);
-                    ui.close();
+                ui.label(RichText::new(group).weak().small());
+                for (icon, text, msg) in items {
+                    if ui.button(il(icon, text)).clicked() {
+                        out.push(msg);
+                        ui.close();
+                    }
                 }
+                ui.separator();
             }
             ui.separator();
             if ui.button(il(icons::IMPORT, "Software update…")).clicked() {
@@ -135,18 +144,21 @@ pub fn status_bar(ui: &mut egui::Ui, m: &Model, now: Instant) {
 
 pub fn host_list(ui: &mut egui::Ui, m: &Model, d: &Drafts, out: &mut Vec<Msg>) {
     ui.add_space(4.0);
+    let overview = egui::Button::selectable(
+        m.selected.is_none(),
+        RichText::new(il(icons::OVERVIEW, "Overview — all hosts"))
+            .strong()
+            .size(17.0),
+    )
+    .min_size(egui::vec2(ui.available_width(), 38.0));
     if ui
-        .selectable_label(
-            m.selected.is_none(),
-            RichText::new(il(icons::OVERVIEW, "Overview — all hosts")).strong(),
-        )
+        .add(overview)
+        .on_hover_text("All hosts as a table or cards")
         .clicked()
     {
         out.push(Msg::Select(None));
     }
-    if ui.button(il(icons::PLUS, "Add host")).clicked() {
-        out.push(Msg::AddHost);
-    }
+    ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new("View").weak());
         if ui

@@ -165,30 +165,32 @@ fn report_cells(row: &mut TableRow<'_, '_>, h: &HostState, r: &HostReport) {
             None => ui.label(RichText::new("n/a").weak()),
         };
     });
-    row.col(|ui| {
-        if r.docker.unavailable.is_some() {
-            dash(ui);
-            return;
-        }
-        let run = r.docker.containers.iter().filter(|c| c.running()).count();
-        let role = match r.docker.portainer().first() {
-            Some((PortainerRole::Server, _)) => " · Portainer",
-            Some((PortainerRole::Agent, _)) => " · agent",
-            None => "",
-        };
-        let rt = if r.docker.is_podman() {
-            " (podman)"
-        } else {
-            ""
-        };
-        clipped(
-            ui,
-            RichText::new(format!(
-                "{run}/{} running{rt}{role}",
-                r.docker.containers.len()
-            )),
-        );
+    row.col(|ui| match docker_text(r) {
+        Some(t) => clipped(ui, RichText::new(t)),
+        None => dash(ui),
     });
+}
+
+/// "12/14 running · agent" (with "(podman)"), or None when Docker is not available.
+pub fn docker_text(r: &HostReport) -> Option<String> {
+    if r.docker.unavailable.is_some() {
+        return None;
+    }
+    let run = r.docker.containers.iter().filter(|c| c.running()).count();
+    let role = match r.docker.portainer().first() {
+        Some((PortainerRole::Server, _)) => " · Portainer",
+        Some((PortainerRole::Agent, _)) => " · agent",
+        None => "",
+    };
+    let rt = if r.docker.is_podman() {
+        " (podman)"
+    } else {
+        ""
+    };
+    Some(format!(
+        "{run}/{} running{rt}{role}",
+        r.docker.containers.len()
+    ))
 }
 
 /// One line, cut with "…" at the cell edge; the full text shows on hover.

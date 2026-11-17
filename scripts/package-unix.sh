@@ -49,7 +49,7 @@ cp crates/telepad-gui/assets/os/ATTRIBUTION.md "$stage/licenses/OS-logos.md"
 
 cat >"$stage/config.example" <<'EOF'
 # Example OpenSSH client config. Rename to "config" next to telepad
-# before the first start to import these hosts, or use Hosts > Import in the app.
+# before the first start to import these hosts, or use Hosts > Import from a file in the app.
 
 # Description shown under the host name
 Host example
@@ -79,7 +79,7 @@ First start
 $first_run
   * If a file named "config" (OpenSSH client config) is next to the program, its
     hosts are imported into telepad.db automatically.
-  * Otherwise use Hosts > Add host, or Hosts > Import.
+  * Otherwise use Hosts > Add one host, or Hosts > Import from a file.
 
 Updates
   Telepad checks https://github.com/yohannaftali/telepad/releases at start and

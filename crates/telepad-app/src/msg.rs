@@ -43,6 +43,10 @@ pub enum Msg {
     SetCompactHostList(bool),
     /// Host list grouped by status.
     SetGroupByStatus(bool),
+    /// Overview as cards (true) or table.
+    SetOverviewCards(bool),
+    /// Overview order chosen in the card view's "Sort by" picker.
+    SetSort(crate::table::Sort),
     /// Overview header clicked.
     SortBy(crate::table::SortKey),
     AddHost,

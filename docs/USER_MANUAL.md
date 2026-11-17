@@ -10,7 +10,7 @@ How to use Telepad once it is [installed](../README.md#install). For a first run
 | Area | What it shows |
 |---|---|
 | **Top bar** | **☰ Hosts** menu, **Refresh all**, **Auto every _N_ s**, the search box, up/down/total counts, a spinner while hosts load, and an **Update X available** button when a new release exists |
-| **Host list** (left) | **Overview — all hosts**, **Add host**, the **View** switch, then every host (see [Host list](#host-list)) |
+| **Host list** (left) | The large **Overview — all hosts** button, the **View** switch, then every host (see [Host list](#host-list)) |
 | **Main area** | The overview table, or the detail page of the selected host |
 | **Status bar** (bottom) | Path of the database in use (hover: the generated ssh config), the Telepad version, and short messages |
 
@@ -36,6 +36,11 @@ the next time Telepad starts.
 
 ## Overview
 
+Click **Overview — all hosts** at the top of the host list to see every host at once. The
+**View** switch above the overview chooses **Table** or **Cards**; the choice is remembered.
+
+### Table
+
 One row per host: **Host**, **Description**, **Address**, **OS**, **CPU**, **Memory**,
 **Fullest disk**, **Temp** (hottest sensor), **Docker** (running/total containers) and
 **Updated** (age of the data). Click a host name to open its detail page; the button at
@@ -54,6 +59,15 @@ the end of a row opens SSH/RDP.
 
 The search box filters both the host list and the overview by host name, address, OS
 or container name.
+
+### Cards
+
+One card per host, wrapping to the window width: status, OS logo, alias (click it for the
+detail page), address and description, OS, CPU / RAM / fullest-disk bars, hottest
+temperature, Docker summary, how long ago it was checked, and an **SSH** / **RDP** button.
+Unreachable hosts show their error instead of the bars. The search box filters the cards;
+**Sort by** picks the order (the same columns as the table, or inventory order) and the
+arrow button next to it reverses it.
 
 ## Host detail
 
@@ -86,7 +100,7 @@ up the others. The window stays responsive while hosts load.
 
 ## Adding, editing and removing hosts
 
-**☰ Hosts → Add host…** (or **Add host** above the list) opens the editor:
+**☰ Hosts → Add one host…** opens the editor:
 
 | Field | Meaning |
 |---|---|
@@ -112,7 +126,7 @@ machine that is down looks different from one where only SSH is broken.
 ## Import and export
 
 - **☰ Hosts → Import ~/.ssh/config** imports your own OpenSSH client config in one click.
-- **☰ Hosts → Import…** reads any file you pick:
+- **☰ Hosts → Import from a file…** reads any file you pick:
   - an **OpenSSH client config** (any file that is not JSON);
   - **JSON** with a list of hosts: a Telepad export from any version, `{"hosts": [...]}`
     or a bare `[...]`. Common field names are understood, in any case and with or

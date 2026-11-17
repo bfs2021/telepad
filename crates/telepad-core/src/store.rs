@@ -52,6 +52,8 @@ pub struct UiPrefs {
     pub compact_host_list: bool,
     /// Host list grouped into Down / Up / Not checked yet.
     pub group_by_status: bool,
+    /// Overview as cards instead of the table.
+    pub overview_cards: bool,
 }
 
 impl Default for UiPrefs {
@@ -59,6 +61,7 @@ impl Default for UiPrefs {
         Self {
             compact_host_list: true,
             group_by_status: false,
+            overview_cards: false,
         }
     }
 }
@@ -231,6 +234,7 @@ impl Store {
         Ok(UiPrefs {
             compact_host_list: flag("ui_compact_host_list", d.compact_host_list)?,
             group_by_status: flag("ui_group_by_status", d.group_by_status)?,
+            overview_cards: flag("ui_overview_cards", d.overview_cards)?,
         })
     }
 
@@ -238,6 +242,7 @@ impl Store {
         let rows = [
             ("ui_compact_host_list", p.compact_host_list),
             ("ui_group_by_status", p.group_by_status),
+            ("ui_overview_cards", p.overview_cards),
         ];
         let tx = self.conn.unchecked_transaction()?;
         for (k, v) in rows {
@@ -730,6 +735,7 @@ mod tests {
         let p = UiPrefs {
             compact_host_list: false,
             group_by_status: true,
+            overview_cards: true,
         };
         s.set_ui_prefs(&p).unwrap();
         assert_eq!(s.ui_prefs().unwrap(), p);
