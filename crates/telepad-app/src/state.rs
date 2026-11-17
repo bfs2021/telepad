@@ -54,6 +54,8 @@ pub struct Drafts {
     pub compact_host_list: bool,
     /// Host list grouped into Down / Up / Not checked yet. Saved in the database.
     pub group_by_status: bool,
+    /// Overview as cards instead of the table. Saved in the database.
+    pub overview_cards: bool,
 }
 
 impl Default for Drafts {
@@ -69,6 +71,7 @@ impl Default for Drafts {
             sort: crate::table::Sort::default(),
             compact_host_list: true,
             group_by_status: false,
+            overview_cards: false,
         }
     }
 }
@@ -241,6 +244,7 @@ impl Drafts {
         UiPrefs {
             compact_host_list: self.compact_host_list,
             group_by_status: self.group_by_status,
+            overview_cards: self.overview_cards,
         }
     }
 }

@@ -28,6 +28,7 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
         } => {
             d.compact_host_list = ui_prefs.compact_host_list;
             d.group_by_status = ui_prefs.group_by_status;
+            d.overview_cards = ui_prefs.overview_cards;
             if let Some(src) = imported_from {
                 say(
                     m,
@@ -99,6 +100,13 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
                 fx.push(Effect::SaveUiPrefs(d.ui_prefs()));
             }
         }
+        Msg::SetOverviewCards(cards) => {
+            if d.overview_cards != cards {
+                d.overview_cards = cards;
+                fx.push(Effect::SaveUiPrefs(d.ui_prefs()));
+            }
+        }
+        Msg::SetSort(sort) => d.sort = sort,
         Msg::UiPrefsSaved(Ok(())) => {}
         Msg::UiPrefsSaved(Err(e)) => say(m, now, format!("Cannot save view settings: {e}")),
         Msg::SelectAlias(alias) => {

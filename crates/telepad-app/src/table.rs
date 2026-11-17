@@ -26,6 +26,37 @@ pub enum SortKey {
 }
 
 impl SortKey {
+    /// Every key, in column order (for the card view's picker).
+    pub const ALL: [SortKey; 11] = [
+        Self::Status,
+        Self::Host,
+        Self::Description,
+        Self::Address,
+        Self::Os,
+        Self::Cpu,
+        Self::Memory,
+        Self::Disk,
+        Self::Temp,
+        Self::Docker,
+        Self::Updated,
+    ];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Status => "Status",
+            Self::Host => "Host",
+            Self::Description => "Description",
+            Self::Address => "Address",
+            Self::Os => "OS",
+            Self::Cpu => "CPU",
+            Self::Memory => "Memory",
+            Self::Disk => "Fullest disk",
+            Self::Temp => "Temperature",
+            Self::Docker => "Docker",
+            Self::Updated => "Updated",
+        }
+    }
+
     /// Numbers start with the largest (busiest, hottest, newest) first.
     pub fn starts_descending(self) -> bool {
         matches!(
