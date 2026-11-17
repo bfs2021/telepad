@@ -98,6 +98,8 @@ pub enum Msg {
     /// Ok((host count, path))
     Exported(Result<(usize, PathBuf), String>),
     KeyPicked(PathBuf),
+    /// Private keys found in ~/.ssh for the editor's key list.
+    KeysFound(Vec<String>),
     UpdateChecked(Result<Check, String>),
     /// Ok(installed version)
     UpdateInstalled(Result<String, String>),
@@ -138,8 +140,11 @@ pub enum Effect {
     },
     /// File dialog + write → [`Msg::Exported`] (nothing if cancelled).
     PickExportFile,
-    /// → [`Msg::KeyPicked`] (nothing if cancelled).
-    PickKeyFile,
+    /// File dialog → [`Msg::KeyPicked`] (nothing if cancelled). Starts in the
+    /// folder of the given IdentityFile, else `~/.ssh`.
+    PickKeyFile(String),
+    /// List private keys in `~/.ssh` → [`Msg::KeysFound`].
+    FindKeys,
     /// The following four report with [`Msg::Notice`].
     OpenSsh(HostEntry),
     OpenRdp(HostEntry),

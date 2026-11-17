@@ -231,6 +231,13 @@ fn pipe_reader<R: Read + Send + 'static>(r: Option<R>) -> thread::JoinHandle<Str
 }
 
 pub fn explain_ssh_error(stderr: &str, code: Option<i32>) -> String {
+    // ssh skips a private key that others can read and then fails with
+    // "Permission denied", which alone looks like a wrong key.
+    if let Some(key) = key_with_bad_permissions(stderr) {
+        return format!(
+            "private key {key} is readable by other users, so ssh ignores it — run: chmod 600 {key}"
+        );
+    }
     let lower = stderr.to_ascii_lowercase();
     let hint = if lower.contains("permission denied") {
         "authentication failed (key not accepted, or host needs a password)"
@@ -265,6 +272,15 @@ pub fn explain_ssh_error(stderr: &str, code: Option<i32>) -> String {
             code.map_or("?".into(), |c| c.to_string())
         ),
     }
+}
+
+/// `Load key "/Users/a/.ssh/id_ed25519": bad permissions` → that path.
+fn key_with_bad_permissions(stderr: &str) -> Option<&str> {
+    stderr.lines().find_map(|l| {
+        let rest = l.trim().strip_prefix("Load key \"")?;
+        let (path, tail) = rest.split_once('"')?;
+        tail.contains("bad permissions").then_some(path)
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -431,5 +447,21 @@ mod tests {
                 .starts_with("authentication")
         );
         assert_eq!(explain_ssh_error("", Some(255)), "ssh exited with code 255");
+    }
+
+    #[test]
+    fn explains_a_private_key_with_too_open_permissions() {
+        let stderr = "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+            @         WARNING: UNPROTECTED PRIVATE KEY FILE!          @
+            Permissions 0644 for '/Users/alice/.ssh/id_ed25519' are too open.
+            This private key will be ignored.
+            Load key \"/Users/alice/.ssh/id_ed25519\": bad permissions
+            alice@192.0.2.10: Permission denied (publickey).";
+        let msg = explain_ssh_error(stderr, Some(255));
+        assert!(
+            msg.contains("chmod 600 /Users/alice/.ssh/id_ed25519"),
+            "{msg}"
+        );
+        assert!(!msg.starts_with("authentication"), "{msg}");
     }
 }

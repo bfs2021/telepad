@@ -115,6 +115,8 @@ pub struct Editor {
     pub error: Option<String>,
     pub confirm_delete: bool,
     pub cloned_from: Option<String>,
+    /// Private keys found in ~/.ssh, offered next to the IdentityFile field.
+    pub key_choices: Vec<String>,
 }
 
 impl Editor {
@@ -129,6 +131,7 @@ impl Editor {
             entry,
             error: None,
             confirm_delete: false,
+            key_choices: Vec::new(),
         }
     }
 

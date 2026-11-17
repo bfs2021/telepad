@@ -77,7 +77,28 @@ pub fn editor_window(ctx: &egui::Context, d: &mut Drafts, out: &mut Vec<Msg>) {
                             egui::TextEdit::singleline(&mut ed.identity)
                                 .hint_text("~/.ssh/id_ed25519"),
                         );
-                        if ui.small_button("Browse…").clicked() {
+                        if !ed.key_choices.is_empty() {
+                            ui.menu_button(icons::CARET_DOWN, |ui| {
+                                ui.label(RichText::new("Keys in ~/.ssh").weak().small());
+                                for k in &ed.key_choices {
+                                    if ui.button(k).clicked() {
+                                        ed.identity = k.clone();
+                                        ui.close();
+                                    }
+                                }
+                            })
+                            .response
+                            .on_hover_text("Choose a key found in ~/.ssh");
+                        }
+                        if ui
+                            .small_button("Browse…")
+                            .on_hover_text(
+                                "Opens in ~/.ssh. On macOS press Cmd+Shift+. in the dialog to \
+                                 show hidden folders; you can also type a path such as \
+                                 ~/.ssh/id_ed25519.",
+                            )
+                            .clicked()
+                        {
                             out.push(Msg::EditorBrowseKey);
                         }
                     });

@@ -167,10 +167,22 @@ impl Runtime {
                     .save_file()?;
                 Some(Msg::Exported(export(ws, &path).map(|n| (n, path))))
             }
-            Effect::PickKeyFile => rfd::FileDialog::new()
-                .set_title("Private key")
-                .pick_file()
-                .map(Msg::KeyPicked),
+            Effect::PickKeyFile(current) => {
+                // Start where keys live: ~/.ssh is hidden on macOS/Linux, so a
+                // dialog opened in the home folder would not show it.
+                let current = telepad_core::expand_home(current.trim());
+                let start = current
+                    .parent()
+                    .filter(|d| !current.as_os_str().is_empty() && d.is_dir())
+                    .map(Path::to_path_buf)
+                    .or_else(|| Some(telepad_core::expand_home("~/.ssh")).filter(|d| d.is_dir()));
+                let mut dialog = rfd::FileDialog::new().set_title("Private key");
+                if let Some(dir) = start {
+                    dialog = dialog.set_directory(dir);
+                }
+                dialog.pick_file().map(Msg::KeyPicked)
+            }
+            Effect::FindKeys => Some(Msg::KeysFound(telepad_core::find_ssh_keys())),
             Effect::OpenSsh(h) => {
                 let s = self.ssh.as_ref()?;
                 let text = match platform::open_terminal(&s.ssh_program, &s.args(&h, false)) {

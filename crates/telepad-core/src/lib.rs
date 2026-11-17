@@ -92,6 +92,43 @@ pub fn expand_home(p: &str) -> PathBuf {
     PathBuf::from(p)
 }
 
+/// Private keys in `~/.ssh`, as `~/.ssh/<name>`, sorted. Only the first line
+/// of each file is read, to tell keys from `.pub`, `known_hosts`, `config`, …
+pub fn find_ssh_keys() -> Vec<String> {
+    use std::io::Read;
+    let dir = expand_home("~/.ssh");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut keys: Vec<String> = entries
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            let mut head = [0u8; 64];
+            let n = std::fs::File::open(e.path())
+                .and_then(|mut f| f.read(&mut head))
+                .ok()?;
+            looks_like_private_key(&name, &String::from_utf8_lossy(&head[..n]))
+                .then(|| format!("~/.ssh/{name}"))
+        })
+        .collect();
+    keys.sort();
+    keys
+}
+
+/// A private key file: PEM / OpenSSH header, and not a public key or ssh's other files.
+pub fn looks_like_private_key(name: &str, head: &str) -> bool {
+    let skip = name.ends_with(".pub")
+        || name.starts_with('.')
+        || matches!(
+            name,
+            "config" | "known_hosts" | "known_hosts.old" | "authorized_keys" | "authorized_keys2"
+        );
+    let first = head.lines().next().unwrap_or_default();
+    !skip && first.starts_with("-----BEGIN") && first.contains("PRIVATE KEY")
+}
+
 /// SSH settings for a config file, including the optional `.env` fallback key.
 pub fn settings_for(config_path: &Path) -> collector::SshSettings {
     let mut s = collector::SshSettings::new(config_path.to_path_buf());
@@ -205,6 +242,28 @@ mod tests {
         assert_eq!(choose_data_dir(Some(exe), None, |_| false), exe);
         assert_eq!(choose_data_dir(None, None, |_| false), PathBuf::from("."));
         assert_eq!(choose_data_dir(None, Some(user.clone()), |_| true), user);
+    }
+
+    #[test]
+    fn recognises_private_keys_only() {
+        let openssh = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3Blbn";
+        let rsa = "-----BEGIN RSA PRIVATE KEY-----\nMIIE";
+        assert!(looks_like_private_key("id_ed25519", openssh));
+        assert!(looks_like_private_key("work-key", rsa));
+        assert!(!looks_like_private_key(
+            "id_ed25519.pub",
+            "ssh-ed25519 AAAA user@pc"
+        ));
+        assert!(!looks_like_private_key(
+            "known_hosts",
+            "host ssh-ed25519 AAAA"
+        ));
+        assert!(!looks_like_private_key("config", "Host *"));
+        assert!(!looks_like_private_key("notes.txt", "hello"));
+        assert!(
+            !looks_like_private_key("id_ed25519.pub", openssh),
+            "a .pub name is never a key"
+        );
     }
 
     #[test]

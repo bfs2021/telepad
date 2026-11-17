@@ -742,3 +742,28 @@ fn overview_card_view_is_saved_and_sort_can_be_picked() {
     assert_eq!(SortKey::ALL.len(), 11);
     assert!(SortKey::ALL.iter().all(|k| !k.title().is_empty()));
 }
+
+#[test]
+fn editor_offers_keys_from_ssh_dir_and_browse_starts_at_current_key() {
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    let fx = update(&mut s, Msg::AddHost, t0);
+    assert!(matches!(fx[..], [Effect::FindKeys]));
+    update(
+        &mut s,
+        Msg::KeysFound(vec!["~/.ssh/id_ed25519".into(), "~/.ssh/work".into()]),
+        t0,
+    );
+    assert_eq!(s.drafts.editor.as_ref().unwrap().key_choices.len(), 2);
+
+    s.drafts.editor.as_mut().unwrap().identity = "~/.ssh/work".into();
+    let fx = update(&mut s, Msg::EditorBrowseKey, t0);
+    assert!(matches!(&fx[..], [Effect::PickKeyFile(p)] if p == "~/.ssh/work"));
+
+    update(&mut s, Msg::EditorClose, t0);
+    update(&mut s, Msg::KeysFound(vec!["x".into()]), t0);
+    assert!(
+        s.drafts.editor.is_none(),
+        "late result without an editor is ignored"
+    );
+}
