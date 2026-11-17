@@ -240,6 +240,9 @@ impl Store {
                 .setting("update_repo")?
                 .filter(|v| !v.trim().is_empty())
                 .unwrap_or(d.repo),
+            auto_install: self
+                .setting("update_auto_install")?
+                .map_or(d.auto_install, |v| v == "1"),
         })
     }
 
@@ -251,6 +254,10 @@ impl Store {
                 if c.enabled { "1" } else { "0" }.to_string(),
             ),
             ("update_repo", c.repo.clone()),
+            (
+                "update_auto_install",
+                if c.auto_install { "1" } else { "0" }.to_string(),
+            ),
         ];
         let tx = self.conn.unchecked_transaction()?;
         for (k, v) in rows {
@@ -756,6 +763,7 @@ mod tests {
         let c = UpdateConfig {
             enabled: false,
             repo: "someone/telepad-fork".into(),
+            auto_install: true,
         };
         s.set_update_config(&c).unwrap();
         assert_eq!(s.update_config().unwrap(), c);

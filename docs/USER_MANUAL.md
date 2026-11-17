@@ -255,10 +255,14 @@ have no BMC; the Sensors section says which step is missing on a host that has o
 ## Updates
 
 Telepad checks the latest [GitHub release](https://github.com/yohannaftali/telepad/releases)
-at start and every 6 hours, in the background, over HTTPS (no account or token).
+at start and every 6 hours, in the background, over HTTPS (no account or token). It reads
+github.com's normal release pages, not the GitHub API, so an office where many people
+share one internet address does not run into GitHub's API limit. If a check fails, it is
+tried again after 30 minutes and the reason shows in **Software update…**.
 
 1. When a newer version exists, the top bar shows **Update X available**.
-2. Click it (or **☰ Hosts → Software update…**) to see the version and release notes.
+2. Click it (or **☰ Hosts → Software update…**) to see the version and a link to the
+   release notes.
 3. **Update now** downloads the zip for your platform, verifies it against the release's
    `.sha256` and replaces `telepad.exe` and `telepad-check.exe`. If anything fails,
    nothing is replaced.
@@ -267,6 +271,12 @@ at start and every 6 hours, in the background, over HTTPS (no account or token).
 **Later** hides the button until the next start; **Check now** checks immediately.
 Your `telepad.db`, `config` and `.env` are never touched. Under **Update source** you
 can turn the checks off or point them at a fork's repository.
+
+**Install automatically** (under **Update source**, off by default) skips steps 1–3:
+when a check finds a newer version, Telepad downloads it, verifies the `.sha256` and
+installs it in the background. Nothing restarts by itself: the top bar shows
+**Restart for X**, or the new version starts the next time you open Telepad. **Later**
+also pauses automatic installs until the next start.
 
 ## Troubleshooting
 
