@@ -2,6 +2,12 @@
 
 Newest first.
 
+## [2026-11-17] — tested: #6 passes
+- Windows 11, release build: Docker stack headers on a real Docker host show
+  "Host port → container" with the arrow (read-only collection); the glyph test covers every
+  GUI string (incl. "→ Container" in Ports in use) and all icon constants, and fails without
+  the fallback. fmt, clippy, 58 tests, release build; diff scanned.
+
 ## [2026-11-17] — fix(ui): "→" no longer renders as a box (#6)
 - Cause: egui's proportional font (Ubuntu-Light + egui-icons) has no U+2192, so the
   `Host port → container` header in Docker stacks and the `→ Container` header in Ports in
