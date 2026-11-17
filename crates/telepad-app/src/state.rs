@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use telepad_core::config::{Access, HostEntry, Inventory};
 use telepad_core::model::HostReport;
-use telepad_core::store::{self, ImportMode, ImportSummary};
+use telepad_core::store::{self, ImportMode, ImportSummary, UiPrefs};
 use telepad_core::update::{Check, UpdateConfig};
 
 /// How long a status-bar message stays visible.
@@ -50,6 +50,10 @@ pub struct Drafts {
     pub update_form_error: Option<String>,
     /// Overview order (header clicks); column widths are kept by the table itself.
     pub sort: crate::table::Sort,
+    /// Host list: one line per host (default) or detailed rows. Saved in the database.
+    pub compact_host_list: bool,
+    /// Host list grouped into Down / Up / Not checked yet. Saved in the database.
+    pub group_by_status: bool,
 }
 
 impl Default for Drafts {
@@ -63,6 +67,8 @@ impl Default for Drafts {
             update_form: UpdateConfig::default(),
             update_form_error: None,
             sort: crate::table::Sort::default(),
+            compact_host_list: true,
+            group_by_status: false,
         }
     }
 }
@@ -227,6 +233,15 @@ impl UpdateState {
                 .check
                 .as_ref()
                 .is_some_and(|c| c.newer && c.asset.is_some())
+    }
+}
+
+impl Drafts {
+    pub fn ui_prefs(&self) -> UiPrefs {
+        UiPrefs {
+            compact_host_list: self.compact_host_list,
+            group_by_status: self.group_by_status,
+        }
     }
 }
 

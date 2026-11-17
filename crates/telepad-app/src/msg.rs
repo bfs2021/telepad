@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use telepad_core::collector;
 use telepad_core::config::{HostEntry, Inventory};
-use telepad_core::store::{ImportMode, ImportSummary};
+use telepad_core::store::{ImportMode, ImportSummary, UiPrefs};
 use telepad_core::update::{Check, UpdateConfig};
 
 /// Input to [`crate::update`]: user intents from the views, and results the
@@ -20,6 +20,8 @@ pub enum Msg {
         /// Set when this run created the database from an OpenSSH config.
         imported_from: Option<PathBuf>,
         update_config: Result<UpdateConfig, String>,
+        /// Remembered view settings (defaults if they could not be read).
+        ui_prefs: UiPrefs,
     },
     /// The database could not be opened; nothing else works.
     Fatal(String),
@@ -37,6 +39,10 @@ pub enum Msg {
     BmcSetup(usize),
     Select(Option<usize>),
     SelectAlias(String),
+    /// Host list: compact (true) or detailed rows.
+    SetCompactHostList(bool),
+    /// Host list grouped by status.
+    SetGroupByStatus(bool),
     /// Overview header clicked.
     SortBy(crate::table::SortKey),
     AddHost,
@@ -92,6 +98,7 @@ pub enum Msg {
     /// Ok(installed version)
     UpdateInstalled(Result<String, String>),
     UpdateSettingsSaved(Result<UpdateConfig, String>),
+    UiPrefsSaved(Result<(), String>),
     /// Text for the status bar (e.g. from opening a terminal).
     Notice(String),
 }
@@ -140,6 +147,8 @@ pub enum Effect {
     InstallUpdate(Check),
     /// → [`Msg::UpdateSettingsSaved`]
     SaveUpdateConfig(UpdateConfig),
+    /// → [`Msg::UiPrefsSaved`]
+    SaveUiPrefs(UiPrefs),
     /// Errors come back as [`Msg::Notice`].
     OpenUrl(String),
     /// Start the new exe and close this window.

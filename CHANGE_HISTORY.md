@@ -2,6 +2,28 @@
 
 Newest first.
 
+## [2026-11-17] — tested: #8 passes
+- Windows 11, release build, 65 real hosts (read-only): compact view by default; Group by
+  status → Down (16), Up (49); Detailed + grouped stored as `ui_compact_host_list=0`,
+  `ui_group_by_status=1` and restored after a restart. fmt, clippy, 62 tests, release
+  build; diff scanned.
+
+## [2026-11-17] — feat(ui): compact host list, group by status (#8)
+- Host list: **Compact** view (default) — one line per host with the worst of CPU / RAM /
+  disk on the right, details on hover — or the previous **Detailed** rows; optional
+  **Group by status** (Down / Up / Not checked yet, collapsible, down first).
+- Both choices are saved in the `settings` table (`ui_compact_host_list`,
+  `ui_group_by_status`) via `Effect::SaveUiPrefs`, loaded with `Msg::Started`.
+- Logic in `telepad-app` (`host_list_groups`, `worst_usage`, `Msg::SetCompactHostList`,
+  `Msg::SetGroupByStatus`) with 3 new tests; store round-trip test in core.
+- Verified on Windows against 65 real hosts (read-only): default compact; Group by status
+  showed Down (16) and Up (49); Detailed + grouped saved as 0/1 in the database and restored
+  after a restart.
+
+## [2026-11-17] — tested: #7 passes
+- Release dry run on PR #14: all five platform packages verified with `sha256sum -c` /
+  `shasum -c` (no CR) — windows, linux x86_64/aarch64, macos x86_64/aarch64 "zip: OK".
+
 ## [2026-11-17] — fix(release): Windows .sha256 written with LF (#7)
 - `package-windows.ps1` wrote the hash file with `Set-Content`, which ends the line with
   CRLF, so `sha256sum -c` looked for a file name ending in a carriage return and failed. It

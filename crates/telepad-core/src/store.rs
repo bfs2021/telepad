@@ -45,6 +45,24 @@ pub struct ImportSummary {
     pub removed: usize,
 }
 
+/// View settings kept in the database so they survive restarts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UiPrefs {
+    /// One line per host in the host list (default), or the detailed three-line rows.
+    pub compact_host_list: bool,
+    /// Host list grouped into Down / Up / Not checked yet.
+    pub group_by_status: bool,
+}
+
+impl Default for UiPrefs {
+    fn default() -> Self {
+        Self {
+            compact_host_list: true,
+            group_by_status: false,
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct JsonFile {
     format: String,
@@ -198,6 +216,35 @@ impl Store {
                 "INSERT INTO settings(key, value) VALUES(?1, ?2)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 params![k, v],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Remembered view settings (`ui_*` keys); missing keys use the defaults.
+    pub fn ui_prefs(&self) -> Result<UiPrefs, StoreError> {
+        let d = UiPrefs::default();
+        let flag = |key: &str, default: bool| -> Result<bool, StoreError> {
+            Ok(self.setting(key)?.map_or(default, |v| v != "0"))
+        };
+        Ok(UiPrefs {
+            compact_host_list: flag("ui_compact_host_list", d.compact_host_list)?,
+            group_by_status: flag("ui_group_by_status", d.group_by_status)?,
+        })
+    }
+
+    pub fn set_ui_prefs(&self, p: &UiPrefs) -> Result<(), StoreError> {
+        let rows = [
+            ("ui_compact_host_list", p.compact_host_list),
+            ("ui_group_by_status", p.group_by_status),
+        ];
+        let tx = self.conn.unchecked_transaction()?;
+        for (k, v) in rows {
+            tx.execute(
+                "INSERT INTO settings(key, value) VALUES(?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![k, if v { "1" } else { "0" }],
             )?;
         }
         tx.commit()?;
@@ -673,6 +720,19 @@ mod tests {
             c,
             "rejected save changes nothing"
         );
+    }
+
+    #[test]
+    fn ui_prefs_default_and_round_trip() {
+        let s = mem();
+        assert_eq!(s.ui_prefs().unwrap(), UiPrefs::default());
+        assert!(UiPrefs::default().compact_host_list);
+        let p = UiPrefs {
+            compact_host_list: false,
+            group_by_status: true,
+        };
+        s.set_ui_prefs(&p).unwrap();
+        assert_eq!(s.ui_prefs().unwrap(), p);
     }
 
     #[test]

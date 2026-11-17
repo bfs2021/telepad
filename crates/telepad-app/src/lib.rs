@@ -19,7 +19,9 @@ pub use state::{
     Drafts, Editor, HostState, ImportDialog, MESSAGE_TTL, Model, State, UpdatePhase, UpdateState,
     matches_filter,
 };
-pub use table::{Sort, SortKey, fullest_disk, hottest, overview_rows};
+pub use table::{
+    HostGroup, Sort, SortKey, fullest_disk, host_list_groups, hottest, overview_rows, worst_usage,
+};
 pub use update::update;
 
 #[cfg(test)]

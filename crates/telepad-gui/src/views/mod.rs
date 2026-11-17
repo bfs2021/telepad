@@ -38,7 +38,7 @@ pub fn draw(root: &mut egui::Ui, m: &Model, d: &mut Drafts, now: Instant) -> Vec
     egui::Panel::left("hosts")
         .resizable(true)
         .default_size(290.0)
-        .show(root, |ui| panels::host_list(ui, m, &d.filter, &mut out));
+        .show(root, |ui| panels::host_list(ui, m, d, &mut out));
 
     egui::CentralPanel::default().show(root, |ui| match m.selected {
         None => overview::overview(ui, m, &d.filter, d.sort, &mut out),
