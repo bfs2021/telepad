@@ -933,3 +933,105 @@ fn docker_actions_open_terminals_and_portainer_stacks_are_refused() {
     update(&mut s, Msg::CloseRunInfo, t0);
     assert_eq!(s.drafts.run_info, None);
 }
+
+#[test]
+fn swarm_actions_cluster_flag_and_cluster_shown_once() {
+    use telepad_core::cluster::{Cluster, Swarm, SwarmNode, SwarmService};
+    use telepad_core::docker_actions::{NodeAction, ServiceAction};
+    use telepad_core::model::HostReport;
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    let swarm = |manager: bool| Swarm {
+        manager,
+        cluster_id: "c1u5t3r".into(),
+        nodes: vec![SwarmNode {
+            id: "a1b2c3d4e5f6g7h8i9j0klmno".into(),
+            hostname: "worker-02".into(),
+            status: "Ready".into(),
+            availability: "Active".into(),
+            ..Default::default()
+        }],
+        services: vec![SwarmService {
+            name: "shop_web".into(),
+            running: 1,
+            desired: 3,
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let report = |manager: bool| HostReport {
+        cluster: Cluster {
+            swarm: Some(swarm(manager)),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    for (i, (alias, manager)) in [("mgr-a", true), ("mgr-b", true), ("worker", false)]
+        .into_iter()
+        .enumerate()
+    {
+        let mut h = HostState::new(host(i as i64 + 1, alias));
+        h.report = Some(report(manager));
+        s.model.hosts.push(h);
+    }
+    let first = s.model.hosts.len() - 3;
+
+    let flags = host_flags(s.model.hosts[first].report.as_ref().unwrap());
+    assert_eq!(flags[0].kind, FlagKind::Cluster);
+    assert!(flags[0].detail.contains("shop_web has 1/3"));
+
+    assert_eq!(cluster_shown_by(&s.model, first), None);
+    assert_eq!(
+        cluster_shown_by(&s.model, first + 1),
+        Some(first),
+        "same cluster ID"
+    );
+    assert_eq!(
+        cluster_shown_by(&s.model, first + 2),
+        None,
+        "workers have no cluster key"
+    );
+
+    let fx = update(
+        &mut s,
+        Msg::SwarmService {
+            host: first,
+            service: "shop_web".into(),
+            action: ServiceAction::Restart,
+        },
+        t0,
+    );
+    assert!(
+        matches!(&fx[..], [Effect::OpenDockerAction(h, p)] if h.alias == "mgr-a" && p.display() == "docker service update --force shop_web")
+    );
+    let fx = update(
+        &mut s,
+        Msg::SwarmNode {
+            host: first,
+            node_id: "a1b2c3d4e5f6g7h8i9j0klmno".into(),
+            action: NodeAction::Drain,
+        },
+        t0,
+    );
+    assert_eq!(fx.len(), 1);
+    let fx = update(
+        &mut s,
+        Msg::SwarmService {
+            host: first + 2,
+            service: "shop_web".into(),
+            action: ServiceAction::Scale,
+        },
+        t0,
+    );
+    assert!(fx.is_empty(), "workers cannot change the swarm");
+    let fx = update(
+        &mut s,
+        Msg::SwarmStackRemove {
+            host: first,
+            stack: "nope".into(),
+        },
+        t0,
+    );
+    assert!(fx.is_empty());
+    assert!(s.model.message.as_ref().unwrap().0.contains("gone"));
+}

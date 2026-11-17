@@ -157,6 +157,72 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
             }
         }
         Msg::CloseRunInfo => d.run_info = None,
+        Msg::SwarmService {
+            host,
+            service,
+            action,
+        } => {
+            let plan = swarm(m, host).map(|(e, sw)| {
+                let ok = sw.services.iter().any(|s| s.name == service);
+                (
+                    e,
+                    if ok {
+                        Plan::swarm_service(&service, action)
+                    } else {
+                        Err(gone("service"))
+                    },
+                )
+            });
+            open_plan(m, now, &mut fx, plan);
+        }
+        Msg::SwarmStackRemove { host, stack } => {
+            let plan = swarm(m, host).map(|(e, sw)| {
+                let ok = sw.stacks.iter().any(|(s, _)| *s == stack);
+                (
+                    e,
+                    if ok {
+                        Plan::swarm_stack_remove(&stack)
+                    } else {
+                        Err(gone("stack"))
+                    },
+                )
+            });
+            open_plan(m, now, &mut fx, plan);
+        }
+        Msg::SwarmNode {
+            host,
+            node_id,
+            action,
+        } => {
+            let plan = swarm(m, host).map(|(e, sw)| {
+                let plan = match sw.nodes.iter().find(|n| n.id == node_id) {
+                    Some(n) => Plan::swarm_node(&n.id, &n.hostname, action),
+                    None => Err(gone("node")),
+                };
+                (e, plan)
+            });
+            open_plan(m, now, &mut fx, plan);
+        }
+        Msg::KubeWorkload {
+            host,
+            namespace,
+            name,
+            action,
+        } => {
+            let plan = m.hosts.get(host).and_then(|h| {
+                let k = h.report.as_ref()?.cluster.kube.as_ref()?;
+                let plan = match k
+                    .workloads
+                    .iter()
+                    .find(|w| w.namespace == namespace && w.name == name)
+                {
+                    Some(w) => Plan::kube_workload(&k.tool, w, action),
+                    None => Err(gone("workload")),
+                };
+                Some((h.entry.clone(), plan))
+            });
+            open_plan(m, now, &mut fx, plan);
+        }
         Msg::RunInfoLoaded(info) => {
             // Ignore a late answer for a window that was closed or replaced.
             if matches!(&d.run_info, Some(RunInfoView::Loading { container, .. }) if *container == info.container)
@@ -543,5 +609,29 @@ fn collected(m: &mut Model, u: collector::Update, now: Instant) {
                 }
             }
         }
+    }
+}
+
+/// The host's Swarm, only on managers (workers cannot change the cluster).
+fn swarm(m: &Model, host: usize) -> Option<(HostEntry, &telepad_core::cluster::Swarm)> {
+    let h = m.hosts.get(host)?;
+    let sw = h.report.as_ref()?.cluster.swarm.as_ref()?;
+    sw.manager.then(|| (h.entry.clone(), sw))
+}
+
+fn gone(what: &str) -> String {
+    format!("That {what} is gone; refresh the host")
+}
+
+fn open_plan(
+    m: &mut Model,
+    now: Instant,
+    fx: &mut Vec<Effect>,
+    plan: Option<(HostEntry, Result<Plan, String>)>,
+) {
+    match plan {
+        Some((entry, Ok(plan))) => fx.push(Effect::OpenDockerAction(entry, plan)),
+        Some((_, Err(e))) => say(m, now, e),
+        None => say(m, now, "Refresh the host first"),
     }
 }

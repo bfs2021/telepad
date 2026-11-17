@@ -241,6 +241,7 @@ pub fn flag_icon(k: FlagKind) -> &'static str {
         FlagKind::EndOfSupport => icons::WARNING,
         FlagKind::Reboot => icons::REFRESH,
         FlagKind::Updates => icons::IMPORT,
+        FlagKind::Cluster => icons::STACK,
     }
 }
 

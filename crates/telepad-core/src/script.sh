@@ -161,4 +161,57 @@ else
   fi
 fi
 
+# Cluster sections: read-only, every call time-limited, output capped.
+TO=""
+command -v timeout >/dev/null 2>&1 && TO="timeout 15"
+
+echo "===SWARM==="
+if [ -n "$D" ]; then
+  sw=$($TO $D info --format '{{.Swarm.LocalNodeState}}|{{.Swarm.ControlAvailable}}' 2>/dev/null)
+  case "$sw" in
+    active\|true)
+      cid=$($TO $D info --format '{{.Swarm.Cluster.ID}}' 2>/dev/null)
+      nid=$($TO $D info --format '{{.Swarm.NodeID}}' 2>/dev/null)
+      echo "info=$sw|$cid|$nid"
+      $TO $D node ls --format '{{json .}}' 2>/dev/null | head -n 200 | sed 's/^/node=/'
+      $TO $D stack ls --format '{{json .}}' 2>/dev/null | head -n 200 | sed 's/^/stack=/'
+      $TO $D service ls --format '{{json .}}' 2>/dev/null | head -n 500 | sed 's/^/service=/'
+      svcs=$($TO $D service ls -q 2>/dev/null | head -n 500)
+      if [ -n "$svcs" ]; then
+        $TO $D service ps $svcs --filter desired-state=running --format '{{json .}}' 2>/dev/null \
+          | grep -v '"CurrentState":"Running' | head -n 50 | sed 's/^/task=/'
+      fi
+      ;;
+    active\|*)
+      nid=$($TO $D info --format '{{.Swarm.NodeID}}' 2>/dev/null)
+      echo "info=$sw||$nid"
+      ;;
+  esac
+fi
+
+echo "===KUBE==="
+for k in kubectl "k3s kubectl" "microk8s kubectl"; do
+  set -- $k
+  command -v "$1" >/dev/null 2>&1 || continue
+  K=""
+  if $TO $k get nodes --request-timeout=8s -o name >/dev/null 2>&1; then K="$k"
+  elif sudo -n $k get nodes --request-timeout=8s -o name >/dev/null 2>&1; then K="sudo -n $k"
+  fi
+  if [ -z "$K" ]; then
+    echo "ERR $1 found but no access to the cluster (kubeconfig not readable by this user)"
+    continue
+  fi
+  echo "tool=$k"
+  echo "id=$($TO $K get namespace kube-system --request-timeout=8s -o jsonpath='{.metadata.uid}' 2>/dev/null)"
+  $TO $K get nodes --request-timeout=15s -o jsonpath='{range .items[*]}node={.metadata.name}|{.status.conditions[?(@.type=="Ready")].status}|{.status.nodeInfo.kubeletVersion}{"\n"}{end}' 2>/dev/null | head -n 500
+  for kind in deployments statefulsets; do
+    $TO $K get "$kind" -A --request-timeout=15s -o jsonpath='{range .items[*]}wl='"$kind"'|{.metadata.namespace}|{.metadata.name}|{.status.readyReplicas}|{.spec.replicas}{"\n"}{end}' 2>/dev/null | head -n 1000
+  done
+  $TO $K get daemonsets -A --request-timeout=15s -o jsonpath='{range .items[*]}wl=daemonsets|{.metadata.namespace}|{.metadata.name}|{.status.numberReady}|{.status.desiredNumberScheduled}{"\n"}{end}' 2>/dev/null | head -n 1000
+  # Only problem pods: not Running/Succeeded, waiting (CrashLoopBackOff...), or 5+ restarts.
+  $TO $K get pods -A --request-timeout=15s -o jsonpath='{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.phase}|{.status.containerStatuses[*].restartCount}|{.status.containerStatuses[*].state.waiting.reason}{"\n"}{end}' 2>/dev/null \
+    | awk -F'|' '{ bad = ($3 != "Running" && $3 != "Succeeded") || $5 != ""; n = split($4, r, " "); for (i = 1; i <= n; i++) if (r[i] + 0 >= 5) bad = 1; if (bad && shown < 100) { print "pod=" $0; shown++ } } END { print "pods=" NR }'
+  break
+done
+
 echo "===END==="

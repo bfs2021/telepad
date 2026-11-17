@@ -10,6 +10,8 @@ pub struct HostReport {
     pub os_version_id: String,
     /// Reboot / pending updates / end of support.
     pub maintenance: Maintenance,
+    /// Docker Swarm / Kubernetes seen from this host.
+    pub cluster: crate::cluster::Cluster,
     pub kernel: String,
     pub os_type: String,
     pub arch: String,

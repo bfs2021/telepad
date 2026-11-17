@@ -3,6 +3,7 @@
 //! model directly.
 
 mod cards;
+mod cluster;
 mod confirm;
 mod detail;
 mod docker;
@@ -54,7 +55,17 @@ pub fn draw(root: &mut egui::Ui, m: &Model, d: &mut Drafts, now: Instant) -> Vec
         }
         Some(i) => {
             if let Some(h) = m.hosts.get(i) {
-                detail::detail(ui, h, i, &mut d.ports_nginx_only, &mut out);
+                let shown_by = telepad_app::cluster_shown_by(m, i)
+                    .and_then(|j| m.hosts.get(j))
+                    .map(|o| o.entry.alias.clone());
+                detail::detail(
+                    ui,
+                    h,
+                    i,
+                    shown_by.as_deref(),
+                    &mut d.ports_nginx_only,
+                    &mut out,
+                );
             }
         }
     });

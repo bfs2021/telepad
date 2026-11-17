@@ -1,3 +1,4 @@
+pub mod cluster;
 pub mod collector;
 pub mod config;
 pub mod docker_actions;

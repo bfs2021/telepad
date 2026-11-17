@@ -2,6 +2,26 @@
 
 Newest first.
 
+## [2026-11-17] — feat(cluster): Docker Swarm and Kubernetes panel and actions (#28)
+- `script.sh` `===SWARM===` (managers: cluster ID, nodes, stacks, services, tasks not
+  running; workers: role only) and `===KUBE===` (kubectl / k3s / microk8s, `sudo -n`
+  only; nodes, workloads, problem pods filtered on the host, pod count). Read-only,
+  `timeout 15` per call, output capped.
+- `cluster.rs`: model, parsers (fixtures `swarm_manager.txt`, `kube_k3s.txt`), problems,
+  badge, cluster key. `HostReport.cluster`.
+- `docker_actions.rs`: `Plan` generalised (docker / compose / kubectl, replica prompt in
+  the terminal for scale); Swarm service logs / rolling restart / scale, node drain /
+  pause / activate, stack rm (`yes`); Kubernetes logs / rollout restart / scale. Names
+  validated (Swarm names, DNS-1123, node IDs, known kubectl tools).
+- `telepad-app`: `host_flags` (cluster flag first), `host_urgency`, `cluster_shown_by`,
+  Swarm / Kubernetes messages (Swarm changes only from managers).
+- UI: Cluster section (nodes, services, stacks, failing tasks; k8s nodes, workloads,
+  problem pods) with action menus; Docker cell badge; "Same cluster as …" link.
+- Verified (read-only) on a real Swarm manager reachable under two aliases: 1 node, 8
+  stacks, 20 services shown; second alias shows "Same cluster as …"; service logs
+  script ran end to end. No Kubernetes host available: covered by fixtures. Write
+  actions not run on production.
+
 ## [2026-11-17] — feat(docker): container and compose actions in a terminal, How it runs (#26)
 - Owner decision: option A, terminal only. AGENTS.md read-only rule gets its second exception.
 - `docker_actions.rs`: `ContainerAction` (shell, logs, start/stop/restart/pause/resume/kill/
