@@ -96,6 +96,23 @@ jobs:
             if [ -z "${{ matrix.target }}" ]; then "$dir/telepad-check" --help; fi
           fi
 
+      - name: Disk image check (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -eu
+          dmg=$(ls dist/telepad-*-${{ matrix.platform }}.dmg)
+          mnt=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null
+          trap 'hdiutil detach "$mnt" >/dev/null' EXIT
+          ls -l "$mnt"
+          test -L "$mnt/Applications"
+          app="$mnt/Telepad.app"
+          test -x "$app/Contents/MacOS/telepad" && test -x "$app/Contents/MacOS/telepad-check"
+          test ! -e "$app/Contents/MacOS/portable"
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --verify --deep --verbose=2 "$app"
+          if [ -z "${{ matrix.target }}" ]; then "$app/Contents/MacOS/telepad-check" --help; fi
+
       - name: Installer smoke test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -122,6 +139,8 @@ jobs:
             dist/telepad-*-${{ matrix.platform }}.zip.sha256
             dist/telepad-*-${{ matrix.platform }}-setup.exe
             dist/telepad-*-${{ matrix.platform }}-setup.exe.sha256
+            dist/telepad-*-${{ matrix.platform }}.dmg
+            dist/telepad-*-${{ matrix.platform }}.dmg.sha256
           if-no-files-found: error
 
   publish:

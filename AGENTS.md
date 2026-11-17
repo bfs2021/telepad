@@ -20,7 +20,7 @@ default branch: `main`
 | Platform | Status |
 |---|---|
 | Windows 10/11 x86_64 | **first target** — build, test and release here first |
-| macOS aarch64 / x86_64 | released; CI; terminal launch via Terminal.app (less tested) |
+| macOS aarch64 / x86_64 | released as `.dmg` (Telepad.app, ad-hoc signed, not notarized) and portable zip; CI; terminal launch via Terminal.app (less tested) |
 | Linux x86_64 / aarch64 | released (built on Ubuntu 22.04, glibc 2.35+); CI; terminal launch via common emulators (less tested) |
 
 ## Architecture
@@ -175,3 +175,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #8 | feat(ui): compact host list for large inventories | closed | 2026-11-17 |
 | #16 | feat(ui): overview cards, bigger Overview button, Add host in menu | closed | 2026-11-17 |
 | #10 | feat(release): Windows installer alongside the portable zip | in-progress | 2026-11-17 |
+| #9 | feat(release): macOS Telepad.app in a .dmg (unsigned) | in-progress | 2026-11-17 |

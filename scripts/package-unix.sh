@@ -113,3 +113,41 @@ printf '%s  %s\n' "$hash" "$name.zip" >"$dist/$name.zip.sha256"
 
 echo "zip:    $dist/$name.zip"
 echo "sha256: $hash"
+
+# macOS: also Telepad.app in a .dmg (ad-hoc signed; not notarized). No portable
+# marker inside the app, so data goes to ~/Library/Application Support/Telepad.
+if [ "$os" = macos ]; then
+    dmgroot="$dist/$name-dmg"
+    app="$dmgroot/Telepad.app"
+    rm -rf "$dmgroot" "$dist/$name.dmg" "$dist/$name.dmg.sha256"
+    mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+    cp "$bin/telepad" "$bin/telepad-check" "$app/Contents/MacOS/"
+    chmod 755 "$app/Contents/MacOS/telepad" "$app/Contents/MacOS/telepad-check"
+    cp -R "$stage/licenses" "$app/Contents/Resources/"
+    cp "$stage/README.txt" "$stage/config.example" "$app/Contents/Resources/"
+    cat >"$app/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Telepad</string>
+  <key>CFBundleDisplayName</key><string>Telepad</string>
+  <key>CFBundleIdentifier</key><string>io.github.yohannaftali.telepad</string>
+  <key>CFBundleExecutable</key><string>telepad</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>$version</string>
+  <key>CFBundleVersion</key><string>$version</string>
+  <key>LSMinimumSystemVersion</key><string>11.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+</dict>
+</plist>
+PLIST
+    codesign --force --deep --sign - "$app"
+    ln -s /Applications "$dmgroot/Applications"
+    hdiutil create -volname "Telepad $version" -srcfolder "$dmgroot" -ov -format UDZO "$dist/$name.dmg" >/dev/null
+    rm -rf "$dmgroot"
+    dhash=$(shasum -a 256 "$dist/$name.dmg" | cut -d' ' -f1)
+    printf '%s  %s\n' "$dhash" "$name.dmg" >"$dist/$name.dmg.sha256"
+    echo "dmg:    $dist/$name.dmg"
+    echo "sha256: $dhash"
+fi
