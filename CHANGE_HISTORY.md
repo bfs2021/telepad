@@ -2,6 +2,14 @@
 
 Newest first.
 
+## [2026-11-17] — fix(release): Windows .sha256 written with LF (#7)
+- `package-windows.ps1` wrote the hash file with `Set-Content`, which ends the line with
+  CRLF, so `sha256sum -c` looked for a file name ending in a carriage return and failed. It
+  now writes `<hash>  <file>` with an LF ending and no BOM, like `sha256sum` does.
+- Release workflow: every platform's package check fails on a CR in the `.sha256` and runs
+  `sha256sum -c` (`shasum -a 256 -c` on macOS) against the zip.
+- Verified on Windows: the new file ends with LF, has no CR or BOM, and `sha256sum -c` → OK.
+
 ## [2026-11-17] — tested: #6 passes
 - Windows 11, release build: Docker stack headers on a real Docker host show
   "Host port → container" with the arrow (read-only collection); the glyph test covers every
