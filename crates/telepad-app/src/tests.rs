@@ -835,3 +835,101 @@ fn theme_choice_is_saved_once_per_change() {
     assert_eq!(ThemePref::parse("dark"), ThemePref::Dark);
     assert_eq!(ThemePref::parse("bogus"), ThemePref::System);
 }
+
+#[test]
+fn docker_actions_open_terminals_and_portainer_stacks_are_refused() {
+    use telepad_core::docker_actions::{ContainerAction, RunInfo, StackAction};
+    use telepad_core::model::{Container, HostReport};
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    let id = |n: u8| format!("{:064x}", n);
+    let compose = |name: &str, n: u8| Container {
+        id: id(n),
+        name: name.into(),
+        state: "running".into(),
+        stack: "shop".into(),
+        working_dir: "/srv/shop".into(),
+        config_files: "/srv/shop/compose.yml".into(),
+        ..Default::default()
+    };
+    let portainer = Container {
+        id: id(3),
+        name: "erp-web".into(),
+        state: "running".into(),
+        stack: "erp".into(),
+        working_dir: "/data/compose/12".into(),
+        config_files: "/data/compose/12/docker-compose.yml".into(),
+        ..Default::default()
+    };
+    let mut r = HostReport::default();
+    r.docker.containers = vec![compose("shop-web", 1), compose("shop-db", 2), portainer];
+    let mut h = HostState::new(host(1, "docker01"));
+    h.report = Some(r);
+    s.model.hosts = vec![h];
+
+    let fx = update(
+        &mut s,
+        Msg::DockerAction {
+            host: 0,
+            container: id(2),
+            action: ContainerAction::Restart,
+        },
+        t0,
+    );
+    assert!(
+        matches!(&fx[..], [Effect::OpenDockerAction(h, p)] if h.alias == "docker01" && p.display() == format!("docker restart {}", id(2)))
+    );
+
+    let fx = update(
+        &mut s,
+        Msg::StackAction {
+            host: 0,
+            stack: "shop".into(),
+            action: StackAction::Up,
+        },
+        t0,
+    );
+    assert!(
+        matches!(&fx[..], [Effect::OpenDockerAction(_, p)] if p.display().ends_with("-f /srv/shop/compose.yml up -d"))
+    );
+
+    let fx = update(
+        &mut s,
+        Msg::StackAction {
+            host: 0,
+            stack: "erp".into(),
+            action: StackAction::Down,
+        },
+        t0,
+    );
+    assert!(fx.is_empty(), "Portainer stacks are changed in Portainer");
+    assert!(s.model.message.as_ref().unwrap().0.contains("Portainer"));
+
+    let fx = update(
+        &mut s,
+        Msg::ShowRunInfo {
+            host: 0,
+            container: id(1),
+        },
+        t0,
+    );
+    assert!(matches!(&fx[..], [Effect::FetchRunInfo(_, c)] if c.name == "shop-web"));
+    let stale = RunInfo {
+        container: "other".into(),
+        ..Default::default()
+    };
+    update(&mut s, Msg::RunInfoLoaded(stale), t0);
+    assert!(matches!(
+        s.drafts.run_info,
+        Some(RunInfoView::Loading { .. })
+    ));
+    let ready = RunInfo {
+        container: "shop-web".into(),
+        docker_run: "docker run".into(),
+        ..Default::default()
+    };
+    update(&mut s, Msg::RunInfoLoaded(ready.clone()), t0);
+    assert_eq!(s.drafts.run_info, Some(RunInfoView::Ready(ready)));
+    update(&mut s, Msg::CloseRunInfo, t0);
+    assert_eq!(s.drafts.run_info, None);
+}

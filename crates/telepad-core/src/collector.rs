@@ -21,9 +21,23 @@ const BMC_SETUP: &str = include_str!("bmc_setup.sh");
 /// as plain arguments (no spaces, quotes, `;` or `%`), so it passes unchanged
 /// through Windows Terminal / `cmd start` and the remote login shell.
 pub fn bmc_setup_args(settings: &SshSettings, host: &HostEntry) -> Vec<String> {
+    terminal_script_args(settings, host, BMC_SETUP)
+}
+
+/// Interactive ssh for a Docker action: the terminal shows the exact command
+/// and runs it only after Enter (see `docker_actions`).
+pub fn docker_action_args(
+    settings: &SshSettings,
+    host: &HostEntry,
+    plan: &crate::docker_actions::Plan,
+) -> Vec<String> {
+    terminal_script_args(settings, host, &plan.script())
+}
+
+fn terminal_script_args(settings: &SshSettings, host: &HostEntry, script: &str) -> Vec<String> {
     let mut a = settings.args(host, false);
     a.insert(0, "-t".into());
-    let script = BMC_SETUP.replace('\r', "");
+    let script = script.replace('\r', "");
     a.extend(
         [
             "echo",
@@ -111,6 +125,55 @@ pub fn collect_one(settings: &SshSettings, host: &HostEntry) -> Result<HostRepor
     if host.access == Access::Rdp {
         return probe_rdp(host, settings.connect_timeout);
     }
+    let (out, err, code) = run_script(settings, host, SCRIPT)?;
+    if !out.contains("===HOSTNAME===") {
+        let msg = explain_ssh_error(&err, code);
+        // Tell "machine is down" apart from "only SSH fails".
+        let target = if host.hostname.is_empty() {
+            &host.alias
+        } else {
+            &host.hostname
+        };
+        let ping = match platform::ping(target, Duration::from_secs(2)) {
+            Some(ms) => format!(" (host answers ping, {ms:.0} ms)"),
+            None => " (no ping reply)".to_string(),
+        };
+        return Err(format!("{msg}{ping}"));
+    }
+    Ok(parse::parse_report(&out))
+}
+
+/// "How it runs" for one container: read-only `docker inspect` + compose files.
+pub fn fetch_run_info(
+    settings: &SshSettings,
+    host: &HostEntry,
+    c: &crate::model::Container,
+) -> crate::docker_actions::RunInfo {
+    use crate::docker_actions::{RunInfo, parse_run_info, run_info_script};
+    let failed = |e: String| RunInfo {
+        container: c.name.clone(),
+        error: Some(e),
+        ..Default::default()
+    };
+    let script = match run_info_script(c) {
+        Ok(s) => s,
+        Err(e) => return failed(e),
+    };
+    match run_script(settings, host, &script) {
+        Ok((out, _, _)) if out.contains("===INSPECT===") || out.contains("ERR ") => {
+            parse_run_info(&c.name, &out)
+        }
+        Ok((_, err, code)) => failed(explain_ssh_error(&err, code)),
+        Err(e) => failed(e),
+    }
+}
+
+/// Run a script with `sh -s` over BatchMode ssh; (stdout, stderr, exit code).
+fn run_script(
+    settings: &SshSettings,
+    host: &HostEntry,
+    script: &str,
+) -> Result<(String, String, Option<i32>), String> {
     let mut cmd = Command::new(&settings.ssh_program);
     cmd.args(settings.args(host, true))
         .args(["sh", "-s"])
@@ -122,7 +185,7 @@ pub fn collect_one(settings: &SshSettings, host: &HostEntry) -> Result<HostRepor
         .spawn()
         .map_err(|e| format!("cannot start {}: {e}", settings.ssh_program.display()))?;
 
-    let script = SCRIPT.replace('\r', "");
+    let script = script.replace('\r', "");
     let mut stdin = child.stdin.take();
     let writer = thread::spawn(move || {
         if let Some(s) = stdin.as_mut() {
@@ -156,21 +219,7 @@ pub fn collect_one(settings: &SshSettings, host: &HostEntry) -> Result<HostRepor
             settings.total_timeout.as_secs()
         ));
     };
-    if !out.contains("===HOSTNAME===") {
-        let msg = explain_ssh_error(&err, status.code());
-        // Tell "machine is down" apart from "only SSH fails".
-        let target = if host.hostname.is_empty() {
-            &host.alias
-        } else {
-            &host.hostname
-        };
-        let ping = match platform::ping(target, Duration::from_secs(2)) {
-            Some(ms) => format!(" (host answers ping, {ms:.0} ms)"),
-            None => " (no ping reply)".to_string(),
-        };
-        return Err(format!("{msg}{ping}"));
-    }
-    Ok(parse::parse_report(&out))
+    Ok((out, err, status.code()))
 }
 
 /// RDP-only Windows hosts: no metrics, just ping + "does the RDP port accept a TCP

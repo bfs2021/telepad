@@ -267,7 +267,7 @@ pub fn detail(
                     if r.docker.containers.is_empty() {
                         ui.label(RichText::new("No containers").weak());
                     } else {
-                        docker_stacks(ui, r);
+                        docker_stacks(ui, r, i, host_address(&h.entry), out);
                     }
                 }
             }
@@ -344,4 +344,13 @@ fn maintenance(ui: &mut egui::Ui, m: &telepad_core::model::Maintenance) {
             }
             ui.end_row();
         });
+}
+
+/// Hostname from the inventory, else the alias.
+fn host_address(e: &telepad_core::config::HostEntry) -> &str {
+    if e.hostname.is_empty() {
+        &e.alias
+    } else {
+        &e.hostname
+    }
 }

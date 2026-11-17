@@ -2,6 +2,21 @@
 
 Newest first.
 
+## [2026-11-17] — feat(docker): container and compose actions in a terminal, How it runs (#26)
+- Owner decision: option A, terminal only. AGENTS.md read-only rule gets its second exception.
+- `docker_actions.rs`: `ContainerAction` (shell, logs, start/stop/restart/pause/resume/kill/
+  remove, offered by state), `StackAction` (logs, up, restart, stop, down), `Plan` → POSIX
+  script that prints the command and waits for Enter / `yes`; IDs, project names and label
+  paths validated and single-quoted; Docker or Podman, `sudo` asks in the terminal.
+- "How it runs": read-only `docker inspect` + compose files over BatchMode ssh →
+  rebuilt `docker run` (network name for Portainer's network IDs), secrets masked.
+- Collector: shared `run_script`; `docker_action_args` like the BMC setup (base64 script).
+- UI: ☰ per container, Compose menu per compose stack, Open in Portainer / "change it in
+  Portainer" for Portainer stacks, How it runs window with Copy.
+- Verified on a real Docker host (read-only only): menus and states, How it runs, compose
+  and container Logs scripts end to end. Write actions not run on production containers;
+  covered by unit tests and an `sh -n` syntax check.
+
 ## [2026-11-17] — feat(ui): System / Light / Dark theme switch (#27)
 - `ThemePref` saved as `ui_theme` in `settings`; `Msg::SetTheme`; combo in the top bar.
 - Own colours moved into a per-theme `Palette` (text colours ≥ 4.5:1 on the panel, usage-bar

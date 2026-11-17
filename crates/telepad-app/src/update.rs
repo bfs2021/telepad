@@ -5,11 +5,13 @@ use std::time::{Duration, Instant};
 
 use telepad_core::collector;
 use telepad_core::config::{Access, HostEntry};
+use telepad_core::docker_actions::{ComposeProject, Plan};
+use telepad_core::model::{Container, Manager};
 use telepad_core::store::{ImportMode, ImportSummary};
 use telepad_core::update::{CHECK_EVERY, CURRENT_VERSION, UpdateConfig};
 
 use crate::msg::{Effect, Msg};
-use crate::state::{Editor, HostState, ImportDialog, Model, State, UpdatePhase};
+use crate::state::{Editor, HostState, ImportDialog, Model, RunInfoView, State, UpdatePhase};
 
 /// Apply `msg` to `state` at time `now`; return the effects to run.
 pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
@@ -85,6 +87,81 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
         Msg::BmcSetup(i) => {
             if let Some(h) = m.hosts.get(i) {
                 fx.push(Effect::OpenBmcSetup(h.entry.clone()));
+            }
+        }
+        Msg::DockerAction {
+            host,
+            container,
+            action,
+        } => {
+            let found = m.hosts.get(host).and_then(|h| {
+                let c = h
+                    .report
+                    .as_ref()?
+                    .docker
+                    .containers
+                    .iter()
+                    .find(|c| c.id == container)?;
+                Some((h.entry.clone(), Plan::container(c, action)))
+            });
+            match found {
+                Some((entry, Ok(plan))) => fx.push(Effect::OpenDockerAction(entry, plan)),
+                Some((_, Err(e))) => say(m, now, e),
+                None => say(m, now, "That container is gone; refresh the host"),
+            }
+        }
+        Msg::StackAction {
+            host,
+            stack,
+            action,
+        } => {
+            let found = m.hosts.get(host).and_then(|h| {
+                let d = &h.report.as_ref()?.docker;
+                let cs: Vec<&Container> =
+                    d.containers.iter().filter(|c| c.stack == stack).collect();
+                let first = cs.first()?;
+                let plan = match d.stack_manager(&cs) {
+                    Manager::Portainer { .. } => Err(format!(
+                        "{stack} is a Portainer stack: change it in Portainer"
+                    )),
+                    Manager::Standalone => Err(format!("{stack} is not a compose stack")),
+                    Manager::Compose { .. } => {
+                        ComposeProject::from_container(first).and_then(|p| Plan::stack(&p, action))
+                    }
+                };
+                Some((h.entry.clone(), plan))
+            });
+            match found {
+                Some((entry, Ok(plan))) => fx.push(Effect::OpenDockerAction(entry, plan)),
+                Some((_, Err(e))) => say(m, now, e),
+                None => say(m, now, "That stack is gone; refresh the host"),
+            }
+        }
+        Msg::ShowRunInfo { host, container } => {
+            let found = m.hosts.get(host).and_then(|h| {
+                let c = h
+                    .report
+                    .as_ref()?
+                    .docker
+                    .containers
+                    .iter()
+                    .find(|c| c.id == container)?;
+                Some((h.entry.clone(), c.clone()))
+            });
+            if let Some((entry, c)) = found {
+                d.run_info = Some(RunInfoView::Loading {
+                    host: entry.alias.clone(),
+                    container: c.name.clone(),
+                });
+                fx.push(Effect::FetchRunInfo(entry, Box::new(c)));
+            }
+        }
+        Msg::CloseRunInfo => d.run_info = None,
+        Msg::RunInfoLoaded(info) => {
+            // Ignore a late answer for a window that was closed or replaced.
+            if matches!(&d.run_info, Some(RunInfoView::Loading { container, .. }) if *container == info.container)
+            {
+                d.run_info = Some(RunInfoView::Ready(info));
             }
         }
         Msg::Select(i) => m.selected = i.filter(|&i| i < m.hosts.len()),
