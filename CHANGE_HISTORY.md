@@ -8,8 +8,9 @@ Newest first.
 - Large full-width **Overview — all hosts** button; Add host removed from the host list;
   Hosts menu grouped Add / Import / Export.
 - Verified on Windows with 65 real hosts: button 38 units tall, cards in 11 rows, setting
-  saved, menu items present. Not verified by automation: choosing an entry in the Sort-by
-  picker (combo not drivable via UI Automation; logic covered by tests).
+  saved, menu items present. Sort-by picker driven with real mouse clicks on test hosts:
+  inventory zeta,alpha,mike → Host alpha,mike,zeta → reverse zeta,mike,alpha.
+- Manual (Overview: Table / Cards) and the packaged README.txt use the new menu labels.
 
 ## [2026-11-17] — tested: #8 passes
 - Windows 11, release build, 65 real hosts (read-only): compact view by default; Group by

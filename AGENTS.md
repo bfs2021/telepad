@@ -173,4 +173,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #6 | fix(ui): "→" renders as a box in table headers | closed | 2026-11-17 |
 | #7 | fix(release): Windows .sha256 has CRLF | closed | 2026-11-17 |
 | #8 | feat(ui): compact host list for large inventories | closed | 2026-11-17 |
-| #16 | feat(ui): overview cards, bigger Overview button, Add host in menu | in-progress | 2026-11-17 |
+| #16 | feat(ui): overview cards, bigger Overview button, Add host in menu | closed | 2026-11-17 |

@@ -24,7 +24,7 @@ Copy-Item crates/telepad-gui/assets/os/ATTRIBUTION.md (Join-Path $stage 'license
 
 @'
 # Example OpenSSH client config. Rename to "config" next to telepad.exe
-# before the first start to import these hosts, or use Hosts > Import in the app.
+# before the first start to import these hosts, or use Hosts > Import from a file in the app.
 
 # Description shown under the host name
 Host example
@@ -43,7 +43,7 @@ Run telepad.exe. Nothing is installed; delete the folder to remove it.
 First start
   * If a file named "config" (OpenSSH client config) is next to the exe, its hosts
     are imported into telepad.db automatically.
-  * Otherwise the host list starts empty: use Hosts > Add host, or Hosts > Import
+  * Otherwise the host list starts empty: use Hosts > Add one host, or Hosts > Import from a file
     (OpenSSH config or a Telepad JSON export).
 
 Files created next to the exe
