@@ -2,6 +2,16 @@
 
 Newest first.
 
+## [2026-11-17] — Telepad 0.5.0
+- Windows installer (`…-windows-x86_64-setup.exe`, per-user) next to the portable zip (#10).
+- macOS `Telepad.app` in a `.dmg` per architecture, ad-hoc signed, not notarized (#9).
+- Installed copies keep data in the per-user folder; portable zips keep it next to the
+  program (`portable` marker).
+- Overview: sortable, resizable table (#4) or cards (#16); bigger Overview button; Add host
+  in the Hosts menu (#16); compact host list with grouping by status (#8).
+- Fixes: detail header and top bar wrap (#5), missing-glyph boxes (#6), Windows `.sha256`
+  line ending (#7); import of any host-list JSON and one-click `~/.ssh/config` import.
+
 ## [2026-11-17] — feat(release): macOS Telepad.app in a .dmg (#9)
 - `package-unix.sh` on macOS also builds `Telepad.app` (Info.plist, both programs, licences),
   ad-hoc signs it (`codesign -s -`; no Apple Developer account, so not notarized) and packs

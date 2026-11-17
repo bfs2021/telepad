@@ -174,5 +174,5 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #7 | fix(release): Windows .sha256 has CRLF | closed | 2026-11-17 |
 | #8 | feat(ui): compact host list for large inventories | closed | 2026-11-17 |
 | #16 | feat(ui): overview cards, bigger Overview button, Add host in menu | closed | 2026-11-17 |
-| #10 | feat(release): Windows installer alongside the portable zip | in-progress | 2026-11-17 |
-| #9 | feat(release): macOS Telepad.app in a .dmg (unsigned) | in-progress | 2026-11-17 |
+| #10 | feat(release): Windows installer alongside the portable zip | closed | 2026-11-17 |
+| #9 | feat(release): macOS Telepad.app in a .dmg (unsigned) | closed | 2026-11-17 |
