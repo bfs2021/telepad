@@ -48,6 +48,8 @@ pub struct Drafts {
     pub editor: Option<Editor>,
     pub update_form: UpdateConfig,
     pub update_form_error: Option<String>,
+    /// Overview order (header clicks); column widths are kept by the table itself.
+    pub sort: crate::table::Sort,
 }
 
 impl Default for Drafts {
@@ -60,6 +62,7 @@ impl Default for Drafts {
             editor: None,
             update_form: UpdateConfig::default(),
             update_form_error: None,
+            sort: crate::table::Sort::default(),
         }
     }
 }

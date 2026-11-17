@@ -515,3 +515,131 @@ fn filter_matches_names_addresses_and_containers() {
     h.report = Some(r);
     assert!(matches_filter("nginx", &h));
 }
+
+fn report(cpu: f32, mem_used_pct: f32, temp: Option<f32>, running: usize) -> HostReport {
+    use telepad_core::model::{Container, Memory, Sensor, SensorKind};
+    let mut r = HostReport {
+        cpu_usage_pct: Some(cpu),
+        memory: Some(Memory {
+            total_kb: 1000,
+            available_kb: (1000.0 - mem_used_pct * 10.0) as u64,
+            ..Default::default()
+        }),
+        os_pretty: "Ubuntu 24.04".into(),
+        ..Default::default()
+    };
+    if let Some(t) = temp {
+        r.sensors.push(Sensor {
+            kind: SensorKind::Temperature,
+            chip: "coretemp".into(),
+            label: "Package".into(),
+            value: t,
+        });
+    }
+    for _ in 0..running {
+        r.docker.containers.push(Container {
+            state: "running".into(),
+            ..Default::default()
+        });
+    }
+    r
+}
+
+fn sort_fixture() -> State {
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    let mut a = host(10, "web10");
+    a.hostname = "192.0.2.10".into();
+    a.note = "Web".into();
+    let mut b = host(9, "db09");
+    b.hostname = "192.0.2.9".into();
+    let mut c = host(2, "nas02");
+    c.hostname = "nas.example".into();
+    c.note = "Archive".into();
+    loaded(&mut s, vec![a, b, c], t0);
+    s.model.hosts[0].report = Some(report(80.0, 20.0, Some(70.0), 3));
+    s.model.hosts[0].updated = Some(t0);
+    s.model.hosts[1].report = Some(report(5.0, 90.0, None, 0));
+    s.model.hosts[1].updated = Some(t0 + Duration::from_secs(5));
+    s.model.hosts[2].error = Some("connection timed out".into());
+    s
+}
+
+fn order(s: &State) -> Vec<&str> {
+    overview_rows(&s.model, &s.drafts.filter, s.drafts.sort)
+        .into_iter()
+        .map(|i| s.model.hosts[i].entry.alias.as_str())
+        .collect()
+}
+
+#[test]
+fn header_clicks_cycle_natural_reversed_and_inventory_order() {
+    let t0 = Instant::now();
+    let mut s = sort_fixture();
+    assert_eq!(order(&s), ["web10", "db09", "nas02"], "inventory order");
+
+    update(&mut s, Msg::SortBy(SortKey::Host), t0);
+    assert_eq!(order(&s), ["db09", "nas02", "web10"]);
+    assert_eq!(s.drafts.sort.direction(SortKey::Host), Some(false));
+    update(&mut s, Msg::SortBy(SortKey::Host), t0);
+    assert_eq!(order(&s), ["web10", "nas02", "db09"]);
+    assert_eq!(s.drafts.sort.direction(SortKey::Host), Some(true));
+    update(&mut s, Msg::SortBy(SortKey::Host), t0);
+    assert_eq!(s.drafts.sort, Sort::default());
+    assert_eq!(order(&s), ["web10", "db09", "nas02"]);
+
+    update(&mut s, Msg::SortBy(SortKey::Cpu), t0);
+    assert!(s.drafts.sort.descending, "numbers start highest first");
+    assert_eq!(s.drafts.sort.direction(SortKey::Host), None);
+}
+
+#[test]
+fn numeric_columns_sort_by_value_and_missing_values_go_last() {
+    let mut s = sort_fixture();
+    let by = |s: &mut State, key, descending| {
+        s.drafts.sort = Sort {
+            key: Some(key),
+            descending,
+        };
+    };
+    by(&mut s, SortKey::Cpu, true);
+    assert_eq!(order(&s), ["web10", "db09", "nas02"]);
+    by(&mut s, SortKey::Cpu, false);
+    assert_eq!(
+        order(&s),
+        ["db09", "web10", "nas02"],
+        "no data stays last both ways"
+    );
+    by(&mut s, SortKey::Memory, true);
+    assert_eq!(order(&s), ["db09", "web10", "nas02"]);
+    by(&mut s, SortKey::Temp, true);
+    assert_eq!(order(&s), ["web10", "db09", "nas02"]);
+    by(&mut s, SortKey::Docker, true);
+    assert_eq!(order(&s), ["web10", "db09", "nas02"]);
+    by(&mut s, SortKey::Updated, true);
+    assert_eq!(order(&s), ["db09", "web10", "nas02"], "most recent first");
+    by(&mut s, SortKey::Status, false);
+    assert_eq!(order(&s)[0], "nas02", "down hosts first");
+    by(&mut s, SortKey::Description, false);
+    assert_eq!(
+        order(&s),
+        ["nas02", "web10", "db09"],
+        "empty description last"
+    );
+}
+
+#[test]
+fn addresses_sort_numerically_and_filter_applies_before_sort() {
+    let mut s = sort_fixture();
+    s.drafts.sort = Sort {
+        key: Some(SortKey::Address),
+        descending: false,
+    };
+    assert_eq!(
+        order(&s),
+        ["db09", "web10", "nas02"],
+        "192.0.2.9 < 192.0.2.10 < names"
+    );
+    s.drafts.filter = "192.0.2".into();
+    assert_eq!(order(&s), ["db09", "web10"]);
+}

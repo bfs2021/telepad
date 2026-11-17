@@ -41,7 +41,7 @@ pub fn draw(root: &mut egui::Ui, m: &Model, d: &mut Drafts, now: Instant) -> Vec
         .show(root, |ui| panels::host_list(ui, m, &d.filter, &mut out));
 
     egui::CentralPanel::default().show(root, |ui| match m.selected {
-        None => overview::overview(ui, m, &d.filter, &mut out),
+        None => overview::overview(ui, m, &d.filter, d.sort, &mut out),
         Some(i) => {
             if let Some(h) = m.hosts.get(i) {
                 detail::detail(ui, h, i, &mut d.ports_nginx_only, &mut out);

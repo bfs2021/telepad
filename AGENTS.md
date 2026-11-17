@@ -58,8 +58,9 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 
 | Path | Role |
 |---|---|
-| `src/state.rs` | `State { model: Model, drafts: Drafts }`, `HostState`, `Editor`, `ImportDialog`, `UpdateState`, `matches_filter` |
+| `src/state.rs` | `State { model: Model, drafts: Drafts }` (drafts include the overview `Sort`), `HostState`, `Editor`, `ImportDialog`, `UpdateState`, `matches_filter` |
 | `src/msg.rs` | `Msg` (user intents + results of effects) and `Effect` (work for the runtime) |
+| `src/table.rs` | Overview order: `Sort`/`SortKey`, `overview_rows` (filter + stable sort), `fullest_disk`, `hottest` |
 | `src/update.rs` | `update(&mut State, Msg, now) -> Vec<Effect>` — the only place the model changes |
 | `src/tests.rs` | Behaviour tests for `update()` (no GUI, no database, no network) |
 
@@ -164,3 +165,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 ## Tracked Issues
 | ID | Title | Status | Last Checked |
 |----|-------|--------|--------------|
+| #4 | feat(ui): overview table — sortable, resizable columns | ready-for-review | 2026-11-17 |

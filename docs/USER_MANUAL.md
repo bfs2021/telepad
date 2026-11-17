@@ -22,8 +22,19 @@ below 70 °C, yellow from 70 °C and red from 85 °C.
 
 One row per host: **Host**, **Description**, **Address**, **OS**, **CPU**, **Memory**,
 **Fullest disk**, **Temp** (hottest sensor), **Docker** (running/total containers) and
-**Updated** (age of the data). Click a host name to open its detail page; the buttons at
-the end of a row open SSH/RDP or refresh just that host.
+**Updated** (age of the data). Click a host name to open its detail page; the button at
+the end of a row opens SSH/RDP.
+
+- **Sort:** click a column header. Numbers start with the highest (busiest CPU, fullest
+  disk, hottest, most containers, most recently updated), text columns from A to Z; the
+  arrow next to the header shows the direction. Click again to reverse, a third time to
+  return to the inventory order. The unlabelled first column sorts by status (down hosts
+  first). Addresses sort numerically (`10.0.0.9` before `10.0.0.10`), and hosts without a
+  value for the column (no data yet, or unreachable) always stay at the bottom.
+- **Resize:** drag the border between two column headers. Text that does not fit is cut
+  with "…"; hover over it to read all of it. Error messages stay inside the OS column.
+- The header row stays in place while you scroll; when the columns are wider than the
+  window, scroll sideways.
 
 The search box filters both the host list and the overview by host name, address, OS
 or container name.

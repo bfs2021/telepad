@@ -37,6 +37,8 @@ pub enum Msg {
     BmcSetup(usize),
     Select(Option<usize>),
     SelectAlias(String),
+    /// Overview header clicked.
+    SortBy(crate::table::SortKey),
     AddHost,
     Edit(usize),
     Clone(usize),
