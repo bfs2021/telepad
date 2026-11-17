@@ -182,3 +182,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #9 | feat(release): macOS Telepad.app in a .dmg (unsigned) | closed | 2026-11-17 |
 | #25 | feat(collector): overview flags for reboot needed, pending updates and end-of-life OS | open | 2026-11-17 |
 | #26 | feat(docker): container shell, actions and compose/run command view | open | 2026-11-17 |
+| #27 | feat(ui): light / dark / system theme switch | open | 2026-11-17 |

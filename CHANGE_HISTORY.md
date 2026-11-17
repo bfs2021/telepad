@@ -2,6 +2,11 @@
 
 Newest first.
 
+## [2026-11-17] — feat(ui): light / dark / system theme switch
+- Issue #27 created on GitHub
+- Scope: telepad-gui (theme switch, colour contrast), telepad-core (`ui_theme` setting), telepad-app
+- Labels: enhancement
+
 ## [2026-11-17] — feat(docker): container shell, actions and compose/run command view (Portainer-like)
 - Issue #26 created on GitHub
 - Scope: telepad-core (remote commands), telepad-app, telepad-gui (Docker section)
