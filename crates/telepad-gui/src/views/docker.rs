@@ -2,9 +2,136 @@
 
 use eframe::egui::{self, Color32, RichText};
 
-use crate::icons;
+use crate::icons::{self, label as il};
 use crate::widgets::*;
+use telepad_app::Msg;
+use telepad_core::docker_actions::{ContainerAction, StackAction};
 use telepad_core::model::{Container, HostReport, Manager, PortainerRole};
+
+/// Web UI of a Portainer server running on this host: https on 9443, http on 9000.
+fn portainer_url(r: &HostReport, host: &str) -> Option<String> {
+    let (_, c) = r
+        .docker
+        .portainer()
+        .into_iter()
+        .find(|(role, _)| *role == PortainerRole::Server)?;
+    let https = c.published.iter().find(|p| p.container_port == 9443);
+    let http = c.published.iter().find(|p| p.container_port == 9000);
+    match (https, http) {
+        (Some(p), _) => Some(format!("https://{host}:{}/", p.host_port)),
+        (None, Some(p)) => Some(format!("http://{host}:{}/", p.host_port)),
+        _ => None,
+    }
+}
+
+const TERMINAL_HINT: &str = "Opens a terminal on the host that shows the exact command and runs it only after you press Enter";
+
+fn action_label(text: &str, destructive: bool) -> RichText {
+    let t = RichText::new(text);
+    if destructive {
+        t.color(usage_color(95.0))
+    } else {
+        t
+    }
+}
+
+/// Actions for one container (menu).
+fn container_menu(ui: &mut egui::Ui, c: &Container, host: usize, out: &mut Vec<Msg>) {
+    ui.menu_button(icons::MENU, |ui| {
+        ui.label(RichText::new(&c.name).strong());
+        ui.label(RichText::new(TERMINAL_HINT).weak().small());
+        ui.separator();
+        for action in ContainerAction::ALL {
+            if !action.available(&c.state) {
+                continue;
+            }
+            let icon = match action {
+                ContainerAction::Shell => icons::TERMINAL,
+                ContainerAction::Logs => icons::INFO,
+                ContainerAction::Remove => icons::TRASH,
+                ContainerAction::Restart => icons::REFRESH,
+                _ => icons::CONTAINER,
+            };
+            if ui
+                .button(action_label(
+                    &format!("{icon} {}", action.title()),
+                    action.destructive(),
+                ))
+                .clicked()
+            {
+                out.push(Msg::DockerAction {
+                    host,
+                    container: c.id.clone(),
+                    action,
+                });
+                ui.close();
+            }
+        }
+        ui.separator();
+        if ui
+            .button(il(icons::COPY, "How it runs…"))
+            .on_hover_text("docker run / compose file, read-only, secrets masked")
+            .clicked()
+        {
+            out.push(Msg::ShowRunInfo {
+                host,
+                container: c.id.clone(),
+            });
+            ui.close();
+        }
+    })
+    .response
+    .on_hover_text("Shell, logs, start / stop… and how it runs");
+}
+
+/// Compose actions for a stack, or the way to Portainer.
+fn stack_controls(
+    ui: &mut egui::Ui,
+    r: &HostReport,
+    stack: &str,
+    manager: &Manager,
+    host: usize,
+    address: &str,
+    out: &mut Vec<Msg>,
+) {
+    match manager {
+        Manager::Compose { .. } => {
+            ui.menu_button(il(icons::STACK, "Compose"), |ui| {
+                ui.label(RichText::new(TERMINAL_HINT).weak().small());
+                ui.separator();
+                for action in StackAction::ALL {
+                    if ui
+                        .button(action_label(action.title(), action.destructive()))
+                        .clicked()
+                    {
+                        out.push(Msg::StackAction {
+                            host,
+                            stack: stack.to_string(),
+                            action,
+                        });
+                        ui.close();
+                    }
+                }
+            });
+        }
+        Manager::Portainer { .. } => match portainer_url(r, address) {
+            Some(url) => {
+                if ui
+                    .button(RichText::new("Open in Portainer").color(portainer_color()))
+                    .on_hover_text(format!("{url}\nPortainer stacks are changed in Portainer"))
+                    .clicked()
+                {
+                    out.push(Msg::OpenUrl(url));
+                }
+            }
+            None => {
+                ui.label(RichText::new("change it in Portainer").weak())
+                    .on_hover_text("Managed by a Portainer server elsewhere (agent on this host)");
+            }
+        },
+        Manager::Standalone => {}
+    }
+}
 
 pub fn host_ports(c: &Container) -> String {
     let mut v: Vec<String> = Vec::new();
@@ -110,7 +237,13 @@ pub fn container_ports(c: &Container) -> (String, String) {
     (published.join("\n"), internal.join(", "))
 }
 
-pub fn docker_stacks(ui: &mut egui::Ui, r: &HostReport) {
+pub fn docker_stacks(
+    ui: &mut egui::Ui,
+    r: &HostReport,
+    host: usize,
+    address: &str,
+    out: &mut Vec<Msg>,
+) {
     for (stack, containers) in r.docker.stacks() {
         let running = containers.iter().filter(|c| c.running()).count();
         let name = if stack.is_empty() {
@@ -125,7 +258,8 @@ pub fn docker_stacks(ui: &mut egui::Ui, r: &HostReport) {
         } else {
             usage_color(80.0)
         };
-        let (mtext, mcolor) = manager_text(&r.docker.stack_manager(&containers));
+        let manager = r.docker.stack_manager(&containers);
+        let (mtext, mcolor) = manager_text(&manager);
         let header = ui
             .horizontal(|ui| {
                 let open_id = ui.make_persistent_id(("stack-open", stack));
@@ -148,6 +282,7 @@ pub fn docker_stacks(ui: &mut egui::Ui, r: &HostReport) {
                     .frame(false),
                 );
                 ui.label(RichText::new(mtext).color(mcolor));
+                stack_controls(ui, r, stack, &manager, host, address, out);
                 if resp.clicked() {
                     open = !open;
                     ui.data_mut(|d| d.insert_persisted(open_id, open));
@@ -171,6 +306,7 @@ pub fn docker_stacks(ui: &mut egui::Ui, r: &HostReport) {
                         "IP address",
                         "Host port → container",
                         "Internal",
+                        "",
                     ] {
                         ui.label(RichText::new(t).strong());
                     }
@@ -206,6 +342,7 @@ pub fn docker_stacks(ui: &mut egui::Ui, r: &HostReport) {
                         let (published, internal) = container_ports(c);
                         ui.label(RichText::new(published).monospace());
                         ui.label(RichText::new(internal).monospace().weak());
+                        container_menu(ui, c, host, out);
                         ui.end_row();
                     }
                 });

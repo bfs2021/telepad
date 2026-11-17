@@ -215,6 +215,24 @@ impl Runtime {
                 };
                 Some(Msg::Notice(text))
             }
+            Effect::OpenDockerAction(h, plan) => {
+                let s = self.ssh.as_ref()?;
+                let args = collector::docker_action_args(s, &h, &plan);
+                let text = match platform::open_terminal(&s.ssh_program, &args) {
+                    Ok(()) => format!(
+                        "Opened a terminal on {}: {} — runs after you confirm there",
+                        h.alias,
+                        plan.display()
+                    ),
+                    Err(e) => e,
+                };
+                Some(Msg::Notice(text))
+            }
+            Effect::FetchRunInfo(h, c) => {
+                let s = self.ssh.clone()?;
+                self.background(move || Msg::RunInfoLoaded(collector::fetch_run_info(&s, &h, &c)));
+                None
+            }
             Effect::CopySshCommand(h) => {
                 let s = self.ssh.as_ref()?;
                 self.ctx

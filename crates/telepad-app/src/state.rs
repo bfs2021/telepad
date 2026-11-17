@@ -58,6 +58,15 @@ pub struct Drafts {
     pub overview_cards: bool,
     /// System / Light / Dark. Saved in the database.
     pub theme: ThemePref,
+    /// "How it runs" window.
+    pub run_info: Option<RunInfoView>,
+}
+
+/// The "How it runs" window: waiting for the host, or the result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunInfoView {
+    Loading { host: String, container: String },
+    Ready(telepad_core::docker_actions::RunInfo),
 }
 
 impl Default for Drafts {
@@ -75,6 +84,7 @@ impl Default for Drafts {
             group_by_status: false,
             overview_cards: false,
             theme: ThemePref::System,
+            run_info: None,
         }
     }
 }

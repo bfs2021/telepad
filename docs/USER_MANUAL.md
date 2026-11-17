@@ -106,10 +106,44 @@ of being cut off. Below that:
   appears (see [Fan speeds and BMC temperatures](#fan-speeds-and-bmc-temperatures-ipmi)).
 - **Docker**: runtime version, management (for example a Portainer agent), compose
   stacks with their folder and file, and every container with image, state, container
-  IP per network and published ports.
+  IP per network and published ports. See [Docker actions](#docker-actions).
 - **Ports in use**: every listening port with the container or process that owns it
   (the process only when the login user may see it); **nginx only** narrows the list to
   the ports nginx serves.
+
+## Docker actions
+
+Each container row has a **☰** menu, and each docker compose stack a **Compose** menu.
+Telepad never changes a container by itself: every action opens a terminal on the host
+that prints the exact command and runs it only after you press **Enter**. **Kill**,
+**Remove** and compose **Down** ask you to type `yes`. If your user may not use Docker
+directly, the command runs with `sudo` and sudo asks for your password there.
+
+| Menu | Actions |
+|---|---|
+| Container ☰ | Shell (`docker exec -it`, bash if present), Logs (`logs -f --tail 200`), Start, Stop, Restart, Pause, Resume, Kill, Remove (`rm` without `-f`: stop it first; volumes are kept) — only the ones that fit the container's state |
+| Compose | Logs, Up (`up -d`), Restart, Stop, Down (`down` without `-v`: named volumes are kept), run with the stack's own folder, project name and files |
+| Portainer stack | **Open in Portainer** when the Portainer server runs on this host, otherwise "change it in Portainer": Portainer stacks are only changed in Portainer |
+
+**How it runs…** (container ☰) reads `docker inspect` and the stack's compose files
+(read-only) and shows a `docker run` command rebuilt from them, with **Copy** buttons.
+Image defaults (environment, command) appear as options, and values whose name looks
+like a secret (`PASSWORD`, `TOKEN`, `KEY`, …) or passwords inside URLs are shown as `***`.
+Portainer keeps its stacks' compose files inside its own volume, so they are not shown.
+
+Example (made-up container):
+
+```
+docker run \
+  -d \
+  --name shop-db \
+  --restart unless-stopped \
+  --network shop_default \
+  -p 127.0.0.1:3307:3306 \
+  -v shop_db:/var/lib/mysql \
+  -e 'MARIADB_ROOT_PASSWORD=***' \
+  mariadb:11
+```
 
 ## Refreshing
 

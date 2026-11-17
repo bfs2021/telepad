@@ -1,5 +1,6 @@
 pub mod collector;
 pub mod config;
+pub mod docker_actions;
 pub mod eol;
 pub mod model;
 pub mod parse;

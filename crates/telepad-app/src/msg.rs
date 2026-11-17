@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 use telepad_core::collector;
 use telepad_core::config::{HostEntry, Inventory};
+use telepad_core::docker_actions::{ContainerAction, Plan, RunInfo, StackAction};
+use telepad_core::model::Container;
 use telepad_core::store::{ImportMode, ImportSummary, UiPrefs};
 use telepad_core::update::{Check, UpdateConfig};
 
@@ -37,6 +39,24 @@ pub enum Msg {
     Ssh(usize),
     CopySsh(usize),
     BmcSetup(usize),
+    /// Container action in a terminal (host index, container id).
+    DockerAction {
+        host: usize,
+        container: String,
+        action: ContainerAction,
+    },
+    /// docker compose action in a terminal (host index, compose project).
+    StackAction {
+        host: usize,
+        stack: String,
+        action: StackAction,
+    },
+    /// "How it runs" window for a container (read-only fetch).
+    ShowRunInfo {
+        host: usize,
+        container: String,
+    },
+    CloseRunInfo,
     Select(Option<usize>),
     SelectAlias(String),
     /// Host list: compact (true) or detailed rows.
@@ -106,6 +126,7 @@ pub enum Msg {
     UpdateInstalled(Result<String, String>),
     UpdateSettingsSaved(Result<UpdateConfig, String>),
     UiPrefsSaved(Result<(), String>),
+    RunInfoLoaded(RunInfo),
     /// Text for the status bar (e.g. from opening a terminal).
     Notice(String),
 }
@@ -160,6 +181,10 @@ pub enum Effect {
     /// → [`Msg::UiPrefsSaved`]
     SaveUiPrefs(UiPrefs),
     /// Errors come back as [`Msg::Notice`].
+    /// Terminal on the host that shows the command and runs it after Enter.
+    OpenDockerAction(HostEntry, Plan),
+    /// Read-only `docker inspect` + compose files → [`Msg::RunInfoLoaded`].
+    FetchRunInfo(HostEntry, Box<Container>),
     OpenUrl(String),
     /// Start the new exe and close this window.
     Relaunch,
