@@ -73,7 +73,8 @@ $zip = Join-Path $dist "$name.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path $stage -DestinationPath $zip
 $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
-"$hash  $name.zip" | Set-Content -Encoding ascii "$zip.sha256"
+# LF only and no BOM, like sha256sum writes it: `sha256sum -c` rejects "name.zip`r".
+[IO.File]::WriteAllText("$zip.sha256", "$hash  $name.zip`n", [Text.UTF8Encoding]::new($false))
 
 Write-Output "zip:    $zip"
 Write-Output "sha256: $hash"

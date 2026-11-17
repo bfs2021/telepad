@@ -66,6 +66,13 @@ jobs:
           zip=$(ls dist/telepad-*-${{ matrix.platform }}.zip)
           test -f "$zip.sha256"
           echo "$zip"
+          # The .sha256 must verify with the standard tools (LF line ending, no BOM).
+          if grep -q $'\r' "$zip.sha256"; then echo "CR in $zip.sha256"; exit 1; fi
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd dist && sha256sum -c "$(basename "$zip").sha256")
+          else
+            (cd dist && shasum -a 256 -c "$(basename "$zip").sha256")
+          fi
           rm -rf /tmp/telepad-check-pkg && mkdir -p /tmp/telepad-check-pkg
           unzip -q "$zip" -d /tmp/telepad-check-pkg
           dir=$(ls -d /tmp/telepad-check-pkg/telepad-*)
