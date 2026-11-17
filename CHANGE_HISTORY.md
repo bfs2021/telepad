@@ -2,6 +2,25 @@
 
 Newest first.
 
+## [2026-11-17] — tested: #4 and #5 pass
+- Windows 11, 200 % scaling, release build; documentation-IP test hosts (unreachable, so
+  long errors fill the OS column). Automated with UI Automation and real mouse input.
+- #4: Host sort asc / desc / third click restores inventory order; Address sorts
+  numerically (192.0.2.9 < 192.0.2.10 < 192.0.2.30 < 198.51.100.2); dragging the
+  Host|Description border 200 px moved the Description column 204 px; long description and
+  error text cut with "…" inside their cells; CPU header stays in the window.
+- #5: at the 1800 px (900-unit) minimum width every detail and top-bar button is inside the
+  window (Delete and the loading count wrap to a second line).
+- fmt, clippy, 57 tests and the release build pass; diff scanned for secrets.
+
+## [2026-11-17] — fix(ui): detail header and top bar wrap instead of clipping (#5)
+- Host detail header split into a wrapping identity row and a wrapping button row; order
+  Open SSH/RDP, Copy ssh command, Refresh | Edit, Clone, Delete (destructive last).
+- Top bar wraps too: at the 900-unit minimum width the loading count was cut off.
+- Verified on Windows (200 % scaling) at 1800 px and 2560 px wide via UI Automation: every
+  header and top-bar button lies inside the window; at minimum width Delete and the
+  loading count move to a second line. Test used documentation-IP hosts only.
+
 ## [2026-11-17] — feat(ui): sortable, resizable overview columns (#4)
 - Overview rebuilt with `egui_extras::TableBuilder`: click a header to sort (natural
   direction, reversed, then inventory order), caret icon shows the direction; drag header

@@ -11,7 +11,8 @@ use crate::widgets::*;
 
 pub fn top_bar(ui: &mut egui::Ui, m: &Model, d: &mut Drafts, out: &mut Vec<Msg>) {
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
+    // Wraps onto a second line on narrow windows instead of clipping the counts.
+    ui.horizontal_wrapped(|ui| {
         ui.heading(il(icons::DATABASE, "Telepad"));
         ui.separator();
         ui.menu_button(il(icons::MENU, "Hosts"), |ui| {
