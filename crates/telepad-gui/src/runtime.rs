@@ -60,6 +60,7 @@ impl Runtime {
                     ssh_config_path: ws.ssh_config.clone(),
                     imported_from: ws.imported_from.clone(),
                     update_config: ws.store.update_config().map_err(|e| e.to_string()),
+                    ui_prefs: ws.store.ui_prefs().unwrap_or_default(),
                 };
                 rt.ssh = Some(ssh);
                 rt.ws = Some(ws);
@@ -219,6 +220,9 @@ impl Runtime {
             Effect::SaveUpdateConfig(cfg) => Some(Msg::UpdateSettingsSaved(
                 self.with_store(|s| s.set_update_config(&cfg)).map(|()| cfg),
             )),
+            Effect::SaveUiPrefs(p) => {
+                Some(Msg::UiPrefsSaved(self.with_store(|s| s.set_ui_prefs(&p))))
+            }
             Effect::OpenUrl(url) => platform::open_url(&url).err().map(Msg::Notice),
             Effect::Relaunch => match relaunch() {
                 Ok(()) => {

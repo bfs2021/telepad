@@ -10,13 +10,29 @@ How to use Telepad once it is [installed](../README.md#install). For a first run
 | Area | What it shows |
 |---|---|
 | **Top bar** | **☰ Hosts** menu, **Refresh all**, **Auto every _N_ s**, the search box, up/down/total counts, a spinner while hosts load, and an **Update X available** button when a new release exists |
-| **Host list** (left) | **Overview — all hosts**, **Add host**, then every host with a status dot, OS logo, address, description and small CPU / RAM / disk bars (or the error) |
+| **Host list** (left) | **Overview — all hosts**, **Add host**, the **View** switch, then every host (see [Host list](#host-list)) |
 | **Main area** | The overview table, or the detail page of the selected host |
 | **Status bar** (bottom) | Path of the database in use (hover: the generated ssh config), the Telepad version, and short messages |
 
 Status dot: green = last check succeeded, red = it failed, blue = first check running,
 grey = no result yet (or not monitored). Usage bars turn yellow and red as they fill; temperatures are blue
 below 70 °C, yellow from 70 °C and red from 85 °C.
+
+## Host list
+
+The list on the left has two views, switched with **View: Compact / Detailed** at its top:
+
+- **Compact** (default): one line per host — status dot, OS logo, alias, and on the right the
+  highest of CPU, RAM and fullest-disk usage (e.g. `Disk 87%`, coloured like the bars).
+  Hover over the bar for all three values, over a red warning sign for the error, and over
+  the name for the description and address.
+- **Detailed**: three lines per host — alias and address, description, and CPU / RAM / disk
+  bars (or the error).
+
+Tick **Group by status** to split the list into **Down**, **Up** and **Not checked yet**
+(down hosts first, each group collapsible, with its count). Click a host to open it;
+right-click for Edit / Clone / Delete. Both choices are saved in `telepad.db` and come back
+the next time Telepad starts.
 
 ## Overview
 

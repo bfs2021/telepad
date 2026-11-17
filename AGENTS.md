@@ -60,7 +60,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 |---|---|
 | `src/state.rs` | `State { model: Model, drafts: Drafts }` (drafts include the overview `Sort`), `HostState`, `Editor`, `ImportDialog`, `UpdateState`, `matches_filter` |
 | `src/msg.rs` | `Msg` (user intents + results of effects) and `Effect` (work for the runtime) |
-| `src/table.rs` | Overview order: `Sort`/`SortKey`, `overview_rows` (filter + stable sort), `fullest_disk`, `hottest` |
+| `src/table.rs` | Overview order: `Sort`/`SortKey`, `overview_rows` (filter + stable sort); host list `host_list_groups`, `worst_usage`; `fullest_disk`, `hottest` |
 | `src/update.rs` | `update(&mut State, Msg, now) -> Vec<Effect>` — the only place the model changes |
 | `src/tests.rs` | Behaviour tests for `update()` (no GUI, no database, no network) |
 
@@ -139,6 +139,7 @@ in `update()` with a test → run the effect in `runtime.rs` → draw/emit it in
 | Generated ssh config | `telepad.ssh_config` next to the DB (do not edit; regenerated on every change) |
 | Fallback key for hosts without IdentityFile | `SSH_IDENTITY_FILE` in `.env` next to `config` |
 | ssh binary override | `TELEPAD_SSH` env var (default: Windows `System32\OpenSSH\ssh.exe`, else `ssh`) |
+| View settings | `settings` table `ui_compact_host_list` / `ui_group_by_status` (host list toggles) |
 | Update source | `settings` table `update_enabled` / `update_repo` (☰ Hosts ▸ Software update…); default `yohannaftali/telepad` |
 
 `.env`, `config`, `telepad.db` and `telepad.ssh_config` are git-ignored: never commit an inventory.
@@ -170,4 +171,5 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #4 | feat(ui): overview table — sortable, resizable columns | closed | 2026-11-17 |
 | #5 | fix(ui): host detail header buttons cut off on narrow windows | closed | 2026-11-17 |
 | #6 | fix(ui): "→" renders as a box in table headers | closed | 2026-11-17 |
-| #7 | fix(release): Windows .sha256 has CRLF | ready-for-review | 2026-11-17 |
+| #7 | fix(release): Windows .sha256 has CRLF | closed | 2026-11-17 |
+| #8 | feat(ui): compact host list for large inventories | ready-for-review | 2026-11-17 |

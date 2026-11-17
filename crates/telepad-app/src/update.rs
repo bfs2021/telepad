@@ -24,7 +24,10 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
             ssh_config_path,
             imported_from,
             update_config,
+            ui_prefs,
         } => {
+            d.compact_host_list = ui_prefs.compact_host_list;
+            d.group_by_status = ui_prefs.group_by_status;
             if let Some(src) = imported_from {
                 say(
                     m,
@@ -84,6 +87,20 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
         }
         Msg::Select(i) => m.selected = i.filter(|&i| i < m.hosts.len()),
         Msg::SortBy(key) => d.sort = d.sort.clicked(key),
+        Msg::SetCompactHostList(compact) => {
+            if d.compact_host_list != compact {
+                d.compact_host_list = compact;
+                fx.push(Effect::SaveUiPrefs(d.ui_prefs()));
+            }
+        }
+        Msg::SetGroupByStatus(group) => {
+            if d.group_by_status != group {
+                d.group_by_status = group;
+                fx.push(Effect::SaveUiPrefs(d.ui_prefs()));
+            }
+        }
+        Msg::UiPrefsSaved(Ok(())) => {}
+        Msg::UiPrefsSaved(Err(e)) => say(m, now, format!("Cannot save view settings: {e}")),
         Msg::SelectAlias(alias) => {
             m.selected = m.hosts.iter().position(|h| h.entry.alias == alias);
         }

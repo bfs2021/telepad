@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use telepad_core::collector::Update;
 use telepad_core::config::{Access, HostEntry, Inventory};
 use telepad_core::model::HostReport;
-use telepad_core::store::{ImportMode, ImportSummary};
+use telepad_core::store::{ImportMode, ImportSummary, UiPrefs};
 use telepad_core::update::{CHECK_EVERY, Check, UpdateConfig};
 
 use crate::*;
@@ -25,6 +25,7 @@ fn started(now: Instant) -> (State, Vec<Effect>) {
             ssh_config_path: "telepad.ssh_config".into(),
             imported_from: None,
             update_config: Ok(UpdateConfig::default()),
+            ui_prefs: UiPrefs::default(),
         },
         now,
     );
@@ -97,12 +98,21 @@ fn fatal_and_bad_update_settings_are_reported() {
             ssh_config_path: "b".into(),
             imported_from: Some("config".into()),
             update_config: Err("bad".into()),
+            ui_prefs: UiPrefs {
+                compact_host_list: false,
+                group_by_status: true,
+            },
         },
         Instant::now(),
     );
     assert!(!fx.iter().any(|e| matches!(e, Effect::CheckUpdate(_))));
     assert!(s.model.update.error.as_deref().unwrap().contains("bad"));
     assert!(s.model.message.as_ref().unwrap().0.contains("Created"));
+    assert!(
+        !s.drafts.compact_host_list,
+        "remembered view settings applied"
+    );
+    assert!(s.drafts.group_by_status);
 }
 
 #[test]
@@ -642,4 +652,69 @@ fn addresses_sort_numerically_and_filter_applies_before_sort() {
     );
     s.drafts.filter = "192.0.2".into();
     assert_eq!(order(&s), ["db09", "web10"]);
+}
+
+#[test]
+fn host_list_view_toggles_are_saved_once_per_change() {
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    assert!(s.drafts.compact_host_list, "compact by default");
+    assert!(
+        update(&mut s, Msg::SetCompactHostList(true), t0).is_empty(),
+        "no change, no save"
+    );
+    let fx = update(&mut s, Msg::SetCompactHostList(false), t0);
+    assert!(
+        matches!(&fx[..], [Effect::SaveUiPrefs(p)] if !p.compact_host_list && !p.group_by_status)
+    );
+    let fx = update(&mut s, Msg::SetGroupByStatus(true), t0);
+    assert!(
+        matches!(&fx[..], [Effect::SaveUiPrefs(p)] if !p.compact_host_list && p.group_by_status)
+    );
+    update(&mut s, Msg::UiPrefsSaved(Err("read-only".into())), t0);
+    assert!(s.model.message.as_ref().unwrap().0.contains("read-only"));
+}
+
+#[test]
+fn host_list_groups_by_status_down_first_and_keeps_filter() {
+    let mut s = sort_fixture();
+    // web10 and db09 up (reports), nas02 down (error), plus one not checked yet
+    s.model.hosts.push(HostState::new(host(4, "new04")));
+    let all = host_list_groups(&s.model, "", false);
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].0, None);
+    assert_eq!(all[0].1.len(), 4);
+
+    let g = host_list_groups(&s.model, "", true);
+    let names: Vec<(&str, Vec<&str>)> = g
+        .iter()
+        .map(|(grp, rows)| {
+            (
+                grp.unwrap().title(),
+                rows.iter()
+                    .map(|&i| s.model.hosts[i].entry.alias.as_str())
+                    .collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("Down", vec!["nas02"]),
+            ("Up", vec!["web10", "db09"]),
+            ("Not checked yet", vec!["new04"]),
+        ]
+    );
+    let filtered = host_list_groups(&s.model, "web", true);
+    assert_eq!(filtered.len(), 1, "empty groups are left out");
+    assert_eq!(filtered[0].0, Some(HostGroup::Up));
+}
+
+#[test]
+fn worst_usage_picks_the_highest_of_cpu_ram_and_disk() {
+    let r = report(30.0, 90.0, None, 0);
+    assert_eq!(worst_usage(&r), Some(("RAM", 90.0)));
+    let r = report(95.0, 10.0, None, 0);
+    assert_eq!(worst_usage(&r).map(|w| w.0), Some("CPU"));
+    assert_eq!(worst_usage(&HostReport::default()), None);
 }

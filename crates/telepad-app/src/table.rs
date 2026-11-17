@@ -179,6 +179,70 @@ fn address_value(s: &str) -> Option<Value> {
     }
 }
 
+/// Status group in the host list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostGroup {
+    Down,
+    Up,
+    /// Not checked yet, loading, or not monitored.
+    Pending,
+}
+
+impl HostGroup {
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Down => "Down",
+            Self::Up => "Up",
+            Self::Pending => "Not checked yet",
+        }
+    }
+
+    fn of(h: &HostState) -> Self {
+        match h.online() {
+            Some(false) => Self::Down,
+            Some(true) => Self::Up,
+            None => Self::Pending,
+        }
+    }
+}
+
+/// Host-list rows matching `filter`, in inventory order: one unnamed group, or
+/// (with `by_status`) Down, Up, Not checked yet — empty groups left out.
+pub fn host_list_groups(
+    m: &Model,
+    filter: &str,
+    by_status: bool,
+) -> Vec<(Option<HostGroup>, Vec<usize>)> {
+    let rows = overview_rows(m, filter, Sort::default());
+    if !by_status {
+        return vec![(None, rows)];
+    }
+    [HostGroup::Down, HostGroup::Up, HostGroup::Pending]
+        .into_iter()
+        .map(|g| {
+            let members = rows
+                .iter()
+                .copied()
+                .filter(|&i| HostGroup::of(&m.hosts[i]) == g)
+                .collect::<Vec<_>>();
+            (Some(g), members)
+        })
+        .filter(|(_, members)| !members.is_empty())
+        .collect()
+}
+
+/// The highest of CPU, memory and fullest-disk usage, with its name.
+pub fn worst_usage(r: &HostReport) -> Option<(&'static str, f32)> {
+    [
+        ("CPU", r.cpu_usage_pct),
+        ("RAM", r.memory.as_ref().map(|m| m.used_pct())),
+        ("Disk", fullest_disk(r).map(|d| d.used_pct())),
+    ]
+    .into_iter()
+    .filter_map(|(n, v)| v.map(|v| (n, v)))
+    .max_by(|a, b| a.1.total_cmp(&b.1))
+}
+
 /// The mount with the highest usage.
 pub fn fullest_disk(r: &HostReport) -> Option<&Disk> {
     r.disks
