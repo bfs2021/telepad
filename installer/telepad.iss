@@ -37,6 +37,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\telepad.exe
+SetupIconFile=..\crates\telepad-gui\assets\icon\telepad.ico
 UninstallDisplayName=Telepad
 LicenseFile={#SourceDir}\licenses\LICENSE-MIT
 ; The running app can be updated in place; ask to close it when (un)installing.

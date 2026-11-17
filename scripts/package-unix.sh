@@ -125,6 +125,7 @@ if [ "$os" = macos ]; then
     chmod 755 "$app/Contents/MacOS/telepad" "$app/Contents/MacOS/telepad-check"
     cp -R "$stage/licenses" "$app/Contents/Resources/"
     cp "$stage/README.txt" "$stage/config.example" "$app/Contents/Resources/"
+    cp crates/telepad-gui/assets/icon/telepad.icns "$app/Contents/Resources/telepad.icns"
     cat >"$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -134,6 +135,7 @@ if [ "$os" = macos ]; then
   <key>CFBundleDisplayName</key><string>Telepad</string>
   <key>CFBundleIdentifier</key><string>io.github.yohannaftali.telepad</string>
   <key>CFBundleExecutable</key><string>telepad</string>
+  <key>CFBundleIconFile</key><string>telepad</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>CFBundleVersion</key><string>$version</string>

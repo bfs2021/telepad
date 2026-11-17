@@ -80,6 +80,12 @@ Each zip contains both programs, a `README.txt`, `config.example` and the licenc
 `<os>-<arch>` part must match `std::env::consts::{OS, ARCH}` of the build: that is what the
 in-app updater looks for.
 
+### App icon
+
+The icon is drawn by `scripts/make-icon.py` (Pillow, plain shapes) into
+`crates/telepad-gui/assets/icon/`. Change the script and run `python scripts/make-icon.py` to
+regenerate the PNG, `.ico` and `.icns`; commit the generated files.
+
 ## Releasing (maintainers)
 
 1. Bump `version` in `Cargo.toml` and add an entry to `CHANGE_HISTORY.md`.
