@@ -2,6 +2,18 @@
 
 Newest first.
 
+## [2026-11-17] — Telepad 0.6.0
+- Maintenance flags: reboot needed, pending / security updates, OS end of support, in a
+  sortable Flags column, cards, host list and the host page (#25).
+- Theme switch: System / Light / Dark, readable colours in both (#27).
+- Docker actions in a terminal that shows the command first: shell, logs, start / stop /
+  restart / pause / resume / kill / remove, compose up / down / restart / stop; How it
+  runs (rebuilt `docker run`, compose files, secrets masked); Open in Portainer (#26).
+- Docker Swarm and Kubernetes: cluster panel, badge, degraded flag, one cluster shown
+  once; service / node / stack and workload actions in a terminal (#28).
+- App icon (#21); IdentityFile picker lists the keys in `~/.ssh` and explains keys whose
+  permissions are too open (#23).
+
 ## [2026-11-17] — feat(cluster): Docker Swarm and Kubernetes panel and actions (#28)
 - `script.sh` `===SWARM===` (managers: cluster ID, nodes, stacks, services, tasks not
   running; workers: role only) and `===KUBE===` (kubectl / k3s / microk8s, `sudo -n`
