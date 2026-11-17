@@ -2,6 +2,12 @@
 
 Newest first.
 
+## [2026-11-17] — feat(ui): System / Light / Dark theme switch (#27)
+- `ThemePref` saved as `ui_theme` in `settings`; `Msg::SetTheme`; combo in the top bar.
+- Own colours moved into a per-theme `Palette` (text colours ≥ 4.5:1 on the panel, usage-bar
+  fills ≥ 4.5:1 under egui's bar text), enforced by a contrast test.
+- Verified on Windows: light theme overview and host page readable (screenshots deleted).
+
 ## [2026-11-17] — feat(collector): overview flags for reboot, pending updates, end-of-life OS (#25)
 - `script.sh` `===UPDATES===` (read-only, offline): host date, reboot flag
   (`/var/run/reboot-required` + packages, `needs-restarting -r`, or running kernel older

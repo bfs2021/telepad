@@ -45,6 +45,7 @@ pub enum Msg {
     SetGroupByStatus(bool),
     /// Overview as cards (true) or table.
     SetOverviewCards(bool),
+    SetTheme(telepad_core::store::ThemePref),
     /// Overview order chosen in the card view's "Sort by" picker.
     SetSort(crate::table::Sort),
     /// Overview header clicked.

@@ -10,8 +10,90 @@ use crate::icons;
 
 pub const TEMP_WARM: f32 = 70.0;
 pub const TEMP_HOT: f32 = 85.0;
-pub const NGINX_COLOR: Color32 = Color32::from_rgb(0x2b, 0x8a, 0xd6);
-pub const PORTAINER_COLOR: Color32 = Color32::from_rgb(0x13, 0xb5, 0xea);
+/// Telepad's own colours, one set per theme so text stays readable (WCAG AA,
+/// 4.5:1 against the panel background; checked by a test).
+pub struct Palette {
+    pub red: Color32,
+    pub amber: Color32,
+    pub green: Color32,
+    pub blue: Color32,
+    pub cyan: Color32,
+    pub purple: Color32,
+    pub grey: Color32,
+    /// Usage-bar fills (red, amber, green, blue) under the theme's own bar text colour.
+    pub bar: [Color32; 4],
+}
+
+pub const DARK: Palette = Palette {
+    red: Color32::from_rgb(0xf0, 0x5a, 0x5a),
+    amber: Color32::from_rgb(0xe8, 0xa3, 0x26),
+    green: Color32::from_rgb(0x3f, 0xb9, 0x6e),
+    blue: Color32::from_rgb(0x5a, 0xa2, 0xf0),
+    cyan: Color32::from_rgb(0x2c, 0xc0, 0xe8),
+    purple: Color32::from_rgb(0xb3, 0x92, 0xec),
+    grey: Color32::from_rgb(0x9a, 0x9a, 0x9a),
+    bar: [
+        Color32::from_rgb(0xa8, 0x2a, 0x2a),
+        Color32::from_rgb(0x8a, 0x50, 0x00),
+        Color32::from_rgb(0x1b, 0x6b, 0x3c),
+        Color32::from_rgb(0x1c, 0x5a, 0x9c),
+    ],
+};
+
+pub const LIGHT: Palette = Palette {
+    red: Color32::from_rgb(0xb9, 0x1c, 0x1c),
+    amber: Color32::from_rgb(0x8a, 0x52, 0x00),
+    green: Color32::from_rgb(0x15, 0x6b, 0x34),
+    blue: Color32::from_rgb(0x1d, 0x4e, 0xd8),
+    cyan: Color32::from_rgb(0x0e, 0x60, 0x7a),
+    purple: Color32::from_rgb(0x6d, 0x28, 0xd9),
+    grey: Color32::from_rgb(0x5f, 0x5f, 0x5f),
+    bar: [
+        Color32::from_rgb(0xfe, 0xca, 0xca),
+        Color32::from_rgb(0xfc, 0xd3, 0x4d),
+        Color32::from_rgb(0x86, 0xef, 0xac),
+        Color32::from_rgb(0x93, 0xc5, 0xfd),
+    ],
+};
+
+static DARK_MODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// Set once per frame from the active egui theme.
+pub fn set_dark_mode(dark: bool) {
+    DARK_MODE.store(dark, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn pal() -> &'static Palette {
+    if DARK_MODE.load(std::sync::atomic::Ordering::Relaxed) {
+        &DARK
+    } else {
+        &LIGHT
+    }
+}
+
+/// Fill for a usage bar: the text on it must stay readable in both themes.
+pub fn usage_fill(pct: f32) -> Color32 {
+    let [red, amber, green, _] = pal().bar;
+    if pct >= 90.0 {
+        red
+    } else if pct >= 75.0 {
+        amber
+    } else {
+        green
+    }
+}
+
+pub fn info_fill() -> Color32 {
+    pal().bar[3]
+}
+
+pub fn nginx_color() -> Color32 {
+    pal().blue
+}
+
+pub fn portainer_color() -> Color32 {
+    pal().cyan
+}
 
 pub fn connect_icon(e: &HostEntry) -> &'static str {
     match e.access {
@@ -32,22 +114,22 @@ pub fn host_os(h: &HostState) -> icons::OsKind {
 
 pub fn usage_color(pct: f32) -> Color32 {
     if pct >= 90.0 {
-        Color32::from_rgb(0xd9, 0x3f, 0x3f)
+        pal().red
     } else if pct >= 75.0 {
-        Color32::from_rgb(0xe0, 0x9b, 0x1a)
+        pal().amber
     } else {
-        Color32::from_rgb(0x2f, 0x9e, 0x5b)
+        pal().green
     }
 }
 
 /// Hot = red, warm = yellow, normal = blue.
 pub fn temp_color(c: f32) -> Color32 {
     if c >= TEMP_HOT {
-        Color32::from_rgb(0xe0, 0x3e, 0x3e)
+        pal().red
     } else if c >= TEMP_WARM {
-        Color32::from_rgb(0xf0, 0xc0, 0x20)
+        pal().amber
     } else {
-        Color32::from_rgb(0x3a, 0x8e, 0xe6)
+        pal().blue
     }
 }
 
@@ -108,10 +190,10 @@ pub fn spinning_fan(ui: &mut egui::Ui, size: f32, frac: f32) -> egui::Response {
 
 pub fn status_dot(ui: &mut egui::Ui, h: &HostState) {
     let color = match (h.loading, h.online()) {
-        (_, Some(false)) => Color32::from_rgb(0xd9, 0x3f, 0x3f),
-        (_, Some(true)) => Color32::from_rgb(0x2f, 0x9e, 0x5b),
-        (true, None) => Color32::from_rgb(0x4a, 0x90, 0xd9),
-        (false, None) => Color32::GRAY,
+        (_, Some(false)) => pal().red,
+        (_, Some(true)) => pal().green,
+        (true, None) => pal().blue,
+        (false, None) => pal().grey,
     };
     let (rect, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
     ui.painter().circle_filled(rect.center(), 4.5, color);
@@ -121,7 +203,7 @@ pub fn bar(ui: &mut egui::Ui, pct: f32, text: String, width: f32) {
     ui.add(
         egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0))
             .desired_width(width)
-            .fill(usage_color(pct))
+            .fill(usage_fill(pct))
             .text(text),
     );
 }
@@ -150,7 +232,7 @@ pub fn severity_color(s: Severity) -> Color32 {
     match s {
         Severity::Danger => usage_color(95.0),
         Severity::Warn => usage_color(80.0),
-        Severity::Info => Color32::from_rgb(0x4a, 0x90, 0xd9),
+        Severity::Info => pal().blue,
     }
 }
 
@@ -189,5 +271,52 @@ mod tests {
         assert!(fan_turns_per_sec(1.0) > fan_turns_per_sec(0.5));
         assert!(fan_turns_per_sec(0.5) > fan_turns_per_sec(0.0));
         assert!(fan_turns_per_sec(0.0) > 0.0);
+    }
+
+    fn luminance(c: Color32) -> f64 {
+        let ch = |v: u8| {
+            let v = f64::from(v) / 255.0;
+            if v <= 0.03928 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * ch(c.r()) + 0.7152 * ch(c.g()) + 0.0722 * ch(c.b())
+    }
+
+    fn contrast(a: Color32, b: Color32) -> f64 {
+        let (x, y) = (luminance(a), luminance(b));
+        (x.max(y) + 0.05) / (x.min(y) + 0.05)
+    }
+
+    #[test]
+    fn palette_text_is_readable_on_both_themes() {
+        let dark_bg = egui::Visuals::dark().panel_fill;
+        let light_bg = egui::Visuals::light().panel_fill;
+        for (theme, p, bg) in [("dark", &DARK, dark_bg), ("light", &LIGHT, light_bg)] {
+            for (name, c) in [
+                ("red", p.red),
+                ("amber", p.amber),
+                ("green", p.green),
+                ("blue", p.blue),
+                ("cyan", p.cyan),
+                ("purple", p.purple),
+                ("grey", p.grey),
+            ] {
+                let r = contrast(c, bg);
+                assert!(r >= 4.5, "{theme} {name}: contrast {r:.2} < 4.5");
+            }
+        }
+        // Bar text (egui draws it in the selection stroke colour) on each bar fill.
+        for (theme, p, v) in [
+            ("dark", &DARK, egui::Visuals::dark()),
+            ("light", &LIGHT, egui::Visuals::light()),
+        ] {
+            for (i, fill) in p.bar.iter().enumerate() {
+                let r = contrast(v.selection.stroke.color, *fill);
+                assert!(r >= 4.5, "{theme} bar {i}: contrast {r:.2} < 4.5");
+            }
+        }
     }
 }

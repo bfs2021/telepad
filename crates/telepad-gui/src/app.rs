@@ -33,6 +33,7 @@ pub fn run(cli_config: Option<String>, cli_db: Option<String>) -> eframe::Result
 struct TelepadApp {
     state: State,
     runtime: Runtime,
+    applied_theme: Option<telepad_core::store::ThemePref>,
 }
 
 impl TelepadApp {
@@ -50,13 +51,28 @@ impl TelepadApp {
             cli_config.as_deref(),
             cli_db.as_deref(),
         );
-        Self { state, runtime }
+        Self {
+            state,
+            runtime,
+            applied_theme: None,
+        }
     }
 }
 
 impl eframe::App for TelepadApp {
     fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.runtime.frame(&mut self.state);
+        let want = self.state.drafts.theme;
+        if self.applied_theme != Some(want) {
+            use telepad_core::store::ThemePref;
+            root.ctx().set_theme(match want {
+                ThemePref::System => egui::ThemePreference::System,
+                ThemePref::Light => egui::ThemePreference::Light,
+                ThemePref::Dark => egui::ThemePreference::Dark,
+            });
+            self.applied_theme = Some(want);
+        }
+        crate::widgets::set_dark_mode(root.style().visuals.dark_mode);
         // Ages ("12s ago"), timers and spinners move without input.
         root.ctx().request_repaint_after(Duration::from_secs(1));
 

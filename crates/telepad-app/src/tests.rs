@@ -102,6 +102,7 @@ fn fatal_and_bad_update_settings_are_reported() {
                 compact_host_list: false,
                 group_by_status: true,
                 overview_cards: true,
+                theme: telepad_core::store::ThemePref::Dark,
             },
         },
         Instant::now(),
@@ -115,6 +116,7 @@ fn fatal_and_bad_update_settings_are_reported() {
     );
     assert!(s.drafts.group_by_status);
     assert!(s.drafts.overview_cards);
+    assert_eq!(s.drafts.theme, telepad_core::store::ThemePref::Dark);
 }
 
 #[test]
@@ -815,4 +817,21 @@ fn maintenance_flags_are_ordered_by_severity_and_sortable() {
     assert!(maintenance_flags(&fine).is_empty());
     assert!(urgency(&eol) > urgency(&soon) && urgency(&soon) > urgency(&fine));
     assert!(SortKey::Flags.starts_descending());
+}
+
+#[test]
+fn theme_choice_is_saved_once_per_change() {
+    use telepad_core::store::ThemePref;
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    assert_eq!(
+        s.drafts.theme,
+        ThemePref::System,
+        "follow the OS by default"
+    );
+    assert!(update(&mut s, Msg::SetTheme(ThemePref::System), t0).is_empty());
+    let fx = update(&mut s, Msg::SetTheme(ThemePref::Light), t0);
+    assert!(matches!(&fx[..], [Effect::SaveUiPrefs(p)] if p.theme == ThemePref::Light));
+    assert_eq!(ThemePref::parse("dark"), ThemePref::Dark);
+    assert_eq!(ThemePref::parse("bogus"), ThemePref::System);
 }

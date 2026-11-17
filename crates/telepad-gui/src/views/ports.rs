@@ -4,7 +4,7 @@ use eframe::egui::{self, RichText};
 
 use telepad_core::model::HostReport;
 
-use crate::widgets::NGINX_COLOR;
+use crate::widgets::nginx_color;
 
 pub fn ports_in_use(ui: &mut egui::Ui, r: &HostReport, nginx_only: &mut bool) {
     let usage = r.port_usage();
@@ -22,7 +22,7 @@ pub fn ports_in_use(ui: &mut egui::Ui, r: &HostReport, nginx_only: &mut bool) {
         ui.label(
             RichText::new("nginx host ports:")
                 .strong()
-                .color(NGINX_COLOR),
+                .color(nginx_color()),
         );
         if nginx_ports.is_empty() {
             ui.label(RichText::new("none").weak());
@@ -32,7 +32,7 @@ pub fn ports_in_use(ui: &mut egui::Ui, r: &HostReport, nginx_only: &mut bool) {
                 .map(u16::to_string)
                 .collect::<Vec<_>>()
                 .join(", ");
-            ui.label(RichText::new(&list).monospace().color(NGINX_COLOR));
+            ui.label(RichText::new(&list).monospace().color(nginx_color()));
             if ui.small_button("copy").clicked() {
                 ui.ctx().copy_text(list);
             }
@@ -64,7 +64,7 @@ pub fn ports_in_use(ui: &mut egui::Ui, r: &HostReport, nginx_only: &mut bool) {
             }
             ui.end_row();
             for u in usage.iter().filter(|u| !*nginx_only || u.nginx) {
-                let color = u.nginx.then_some(NGINX_COLOR);
+                let color = u.nginx.then_some(nginx_color());
                 let txt = |t: String| {
                     let rt = RichText::new(t).monospace();
                     match color {
