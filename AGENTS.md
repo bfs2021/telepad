@@ -178,7 +178,7 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #16 | feat(ui): overview cards, bigger Overview button, Add host in menu | closed | 2026-11-17 |
 | #10 | feat(release): Windows installer alongside the portable zip | closed | 2026-11-17 |
 | #21 | feat(ui): Telepad app icon | closed | 2026-11-17 |
-| #23 | fix(ui): IdentityFile Browse cannot reach ~/.ssh on macOS | ready-for-review | 2026-11-17 |
+| #23 | fix(ui): IdentityFile Browse cannot reach ~/.ssh on macOS | closed | 2026-11-17 |
 | #9 | feat(release): macOS Telepad.app in a .dmg (unsigned) | closed | 2026-11-17 |
 | #25 | feat(collector): overview flags for reboot needed, pending updates and end-of-life OS | open | 2026-11-17 |
 | #26 | feat(docker): container shell, actions and compose/run command view | open | 2026-11-17 |
