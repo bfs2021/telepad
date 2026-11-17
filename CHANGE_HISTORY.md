@@ -2,6 +2,21 @@
 
 Newest first.
 
+## [2026-11-17] — feat(collector): overview flags for reboot, pending updates, end-of-life OS (#25)
+- `script.sh` `===UPDATES===` (read-only, offline): host date, reboot flag
+  (`/var/run/reboot-required` + packages, `needs-restarting -r`, or running kernel older
+  than the newest installed RPM kernel), pending/security update counts (apt-check /
+  `apt-get -s`, dnf/yum `check-update --cacheonly [--security]`, apk).
+- `eol.rs`: end-of-support table (Ubuntu, Debian, CentOS/Stream, RHEL, Rocky, Alma, Oracle,
+  Alpine, openSUSE Leap) and date arithmetic against the host's date; `OsRelease` now
+  carries `ID`/`VERSION_ID`; `HostReport.maintenance`.
+- `telepad-app`: `maintenance_flags` (severity-ordered), `urgency`, sortable `Flags` column.
+- UI: Flags column (table), flag chips (cards), most-urgent icon (compact list),
+  Maintenance section (detail).
+- Verified against real hosts (read-only): Ubuntu 16.04 / 20.04 and CentOS 7 flagged EOL;
+  RHEL 8 security count fixed (advisories → packages, 184 of 247); reboot known on RPM
+  hosts via the kernel check; flags visible in the overview and host list.
+
 ## [2026-11-17] — feat(cluster): Docker Swarm and Kubernetes panel (view first, then manage)
 - Issue #28 created on GitHub
 - Scope: telepad-core (script.sh, parsers, model), telepad-app, telepad-gui (cluster panel)

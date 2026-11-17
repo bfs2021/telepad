@@ -739,7 +739,7 @@ fn overview_card_view_is_saved_and_sort_can_be_picked() {
         "view-only, nothing saved"
     );
     assert_eq!(s.drafts.sort, pick);
-    assert_eq!(SortKey::ALL.len(), 11);
+    assert_eq!(SortKey::ALL.len(), 12);
     assert!(SortKey::ALL.iter().all(|k| !k.title().is_empty()));
 }
 
@@ -766,4 +766,53 @@ fn editor_offers_keys_from_ssh_dir_and_browse_starts_at_current_key() {
         s.drafts.editor.is_none(),
         "late result without an editor is ignored"
     );
+}
+
+#[test]
+fn maintenance_flags_are_ordered_by_severity_and_sortable() {
+    use telepad_core::model::Maintenance;
+    let today = Some("2026-11-17".to_string());
+    let eol = Maintenance {
+        today: today.clone(),
+        reboot_required: Some(true),
+        reboot_packages: vec!["linux-base".into()],
+        updates: Some(98),
+        security_updates: Some(6),
+        end_of_support: Some("2021-04-30".into()),
+    };
+    let f = maintenance_flags(&eol);
+    let kinds: Vec<FlagKind> = f.iter().map(|f| f.kind).collect();
+    assert_eq!(
+        kinds,
+        [FlagKind::EndOfSupport, FlagKind::Updates, FlagKind::Reboot]
+    );
+    assert_eq!(f[0].severity, Severity::Danger);
+    assert!(f[0].detail.contains("2021-04-30"));
+    assert_eq!(f[1].short, "98 (6 sec)");
+    assert!(f[2].detail.contains("linux-base"));
+
+    let soon = Maintenance {
+        today: today.clone(),
+        end_of_support: Some("2027-01-31".into()),
+        updates: Some(3),
+        security_updates: Some(0),
+        ..Default::default()
+    };
+    let f = maintenance_flags(&soon);
+    assert_eq!(
+        (f[0].kind, f[0].severity),
+        (FlagKind::EndOfSupport, Severity::Warn)
+    );
+    assert_eq!((f[1].short.as_str(), f[1].severity), ("3", Severity::Info));
+
+    let fine = Maintenance {
+        today,
+        reboot_required: Some(false),
+        updates: Some(0),
+        end_of_support: Some("2030-01-01".into()),
+        ..Default::default()
+    };
+    assert!(maintenance_flags(&fine).is_empty());
+    assert!(urgency(&eol) > urgency(&soon) && urgency(&soon) > urgency(&fine));
+    assert!(SortKey::Flags.starts_descending());
 }

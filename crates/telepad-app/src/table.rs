@@ -5,7 +5,8 @@ use std::cmp::Ordering;
 use std::net::IpAddr;
 use std::time::Instant;
 
-use telepad_core::model::{Disk, HostReport, SensorKind};
+use telepad_core::eol::Support;
+use telepad_core::model::{Disk, HostReport, Maintenance, SensorKind};
 
 use crate::state::{HostState, Model, matches_filter};
 
@@ -23,11 +24,13 @@ pub enum SortKey {
     Temp,
     Docker,
     Updated,
+    /// Maintenance flags (end of support, reboot, updates), most urgent first.
+    Flags,
 }
 
 impl SortKey {
     /// Every key, in column order (for the card view's picker).
-    pub const ALL: [SortKey; 11] = [
+    pub const ALL: [SortKey; 12] = [
         Self::Status,
         Self::Host,
         Self::Description,
@@ -39,6 +42,7 @@ impl SortKey {
         Self::Temp,
         Self::Docker,
         Self::Updated,
+        Self::Flags,
     ];
 
     pub fn title(self) -> &'static str {
@@ -54,6 +58,7 @@ impl SortKey {
             Self::Temp => "Temperature",
             Self::Docker => "Docker",
             Self::Updated => "Updated",
+            Self::Flags => "Flags",
         }
     }
 
@@ -61,7 +66,13 @@ impl SortKey {
     pub fn starts_descending(self) -> bool {
         matches!(
             self,
-            Self::Cpu | Self::Memory | Self::Disk | Self::Temp | Self::Docker | Self::Updated
+            Self::Cpu
+                | Self::Memory
+                | Self::Disk
+                | Self::Temp
+                | Self::Docker
+                | Self::Updated
+                | Self::Flags
         )
     }
 }
@@ -197,6 +208,7 @@ fn sort_value(h: &HostState, key: SortKey) -> Option<Value> {
             .map(|r| Value::Num(r.docker.containers.iter().filter(|c| c.running()).count() as f64)),
         // Most recent first when descending: newer Instants are larger.
         SortKey::Updated => h.updated.map(Value::At),
+        SortKey::Flags => r.map(|r| Value::Num(urgency(&r.maintenance) as f64)),
     }
 }
 
@@ -208,6 +220,106 @@ fn address_value(s: &str) -> Option<Value> {
         Ok(IpAddr::V6(v6)) => Some(Value::Text(format!("~{:032x}", u128::from(v6)))),
         Err(_) => text(s),
     }
+}
+
+/// How urgent a maintenance flag is (drives icon colour).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Severity {
+    Info,
+    Warn,
+    Danger,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlagKind {
+    Reboot,
+    Updates,
+    EndOfSupport,
+}
+
+/// One maintenance flag: what, how urgent, a short label and a hover text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Flag {
+    pub kind: FlagKind,
+    pub severity: Severity,
+    pub short: String,
+    pub detail: String,
+}
+
+/// Flags to show for a host, most urgent first: end of support (ended = danger,
+/// ending within 6 months = warn), reboot required (warn), pending updates
+/// (danger with security updates, else info).
+pub fn maintenance_flags(m: &Maintenance) -> Vec<Flag> {
+    let mut flags = Vec::new();
+    match (m.support(), m.end_of_support.as_deref()) {
+        (Some(Support::Ended { days_ago }), Some(date)) => flags.push(Flag {
+            kind: FlagKind::EndOfSupport,
+            severity: Severity::Danger,
+            short: "EOL".into(),
+            detail: format!(
+                "OS release out of vendor support since {date} ({days_ago} days): no more security fixes — upgrade the OS"
+            ),
+        }),
+        (Some(Support::EndingSoon { days_left }), Some(date)) => flags.push(Flag {
+            kind: FlagKind::EndOfSupport,
+            severity: Severity::Warn,
+            short: format!("EOL {days_left}d"),
+            detail: format!("OS release support ends on {date} (in {days_left} days): plan the upgrade"),
+        }),
+        _ => {}
+    }
+    if m.reboot_required == Some(true) {
+        let why = if m.reboot_packages.is_empty() {
+            String::new()
+        } else {
+            format!(" — requested by {}", m.reboot_packages.join(", "))
+        };
+        flags.push(Flag {
+            kind: FlagKind::Reboot,
+            severity: Severity::Warn,
+            short: "reboot".into(),
+            detail: format!("Reboot required{why}"),
+        });
+    }
+    if let Some(n) = m.updates.filter(|&n| n > 0) {
+        let sec = m.security_updates.unwrap_or(0);
+        flags.push(Flag {
+            kind: FlagKind::Updates,
+            severity: if sec > 0 {
+                Severity::Danger
+            } else {
+                Severity::Info
+            },
+            short: if sec > 0 {
+                format!("{n} ({sec} sec)")
+            } else {
+                n.to_string()
+            },
+            detail: if sec > 0 {
+                format!("{n} package updates pending, {sec} of them security updates")
+            } else {
+                format!("{n} package updates pending")
+            },
+        });
+    }
+    flags.sort_by_key(|f| std::cmp::Reverse(f.severity));
+    flags
+}
+
+/// Sort weight for the Flags column: ended support > reboot > security > updates.
+pub fn urgency(m: &Maintenance) -> u64 {
+    let mut u = 0;
+    match m.support() {
+        Some(Support::Ended { .. }) => u += 1_000_000,
+        Some(Support::EndingSoon { .. }) => u += 300_000,
+        _ => {}
+    }
+    if m.reboot_required == Some(true) {
+        u += 100_000;
+    }
+    u += u64::from(m.security_updates.unwrap_or(0)).min(999) * 100;
+    u += u64::from(m.updates.unwrap_or(0)).min(99);
+    u
 }
 
 /// Status group in the host list.

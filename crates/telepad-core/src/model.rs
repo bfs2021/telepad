@@ -5,6 +5,11 @@ pub struct HostReport {
     pub hostname: String,
     pub os_name: String,
     pub os_pretty: String,
+    /// os-release `ID` (e.g. `ubuntu`) and `VERSION_ID` (e.g. `22.04`).
+    pub os_id: String,
+    pub os_version_id: String,
+    /// Reboot / pending updates / end of support.
+    pub maintenance: Maintenance,
     pub kernel: String,
     pub os_type: String,
     pub arch: String,
@@ -29,6 +34,37 @@ pub struct HostReport {
     pub ping_ms: Option<f32>,
     /// RDP port accepted a TCP connection (RDP hosts).
     pub rdp_open: bool,
+}
+
+/// What needs doing on a host: reboot, updates, OS release past end of support.
+/// `None` = could not be determined (tool missing, unknown release).
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+pub struct Maintenance {
+    /// The host's own date (`YYYY-MM-DD`), used for the end-of-support check.
+    pub today: Option<String>,
+    pub reboot_required: Option<bool>,
+    /// Packages that asked for the reboot (Debian/Ubuntu).
+    pub reboot_packages: Vec<String>,
+    pub updates: Option<u32>,
+    pub security_updates: Option<u32>,
+    /// End of vendor support for this release (`YYYY-MM-DD`), when known.
+    pub end_of_support: Option<String>,
+}
+
+impl Maintenance {
+    pub fn support(&self) -> Option<crate::eol::Support> {
+        crate::eol::support(self.end_of_support.as_deref()?, self.today.as_deref()?)
+    }
+
+    /// Anything to show in the overview (reboot, updates, ending or ended support).
+    pub fn needs_attention(&self) -> bool {
+        self.reboot_required == Some(true)
+            || self.updates.is_some_and(|n| n > 0)
+            || matches!(
+                self.support(),
+                Some(crate::eol::Support::Ended { .. } | crate::eol::Support::EndingSoon { .. })
+            )
+    }
 }
 
 /// A listening socket on the host (`ss -tuln` / `netstat -tuln`).

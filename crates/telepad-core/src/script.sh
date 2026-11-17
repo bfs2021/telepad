@@ -92,6 +92,45 @@ elif command -v netstat >/dev/null 2>&1; then
   sudo -n netstat -tulnp 2>/dev/null || netstat -tuln 2>/dev/null
 fi
 
+echo "===UPDATES==="
+# Read-only and offline: only the local package cache is consulted.
+echo "today=$(date +%Y-%m-%d 2>/dev/null)"
+T=""; command -v timeout >/dev/null 2>&1 && T="timeout 20"
+if [ -f /var/run/reboot-required ]; then
+  echo "reboot=yes"
+  [ -r /var/run/reboot-required.pkgs ] && sort -u /var/run/reboot-required.pkgs 2>/dev/null | head -n 20 | sed 's/^/rebootpkg=/'
+elif command -v needs-restarting >/dev/null 2>&1; then
+  $T needs-restarting -r >/dev/null 2>&1
+  case $? in 0) echo "reboot=no" ;; 1) echo "reboot=yes" ;; esac
+elif [ -d /var/lib/dpkg ]; then
+  echo "reboot=no"
+elif command -v rpm >/dev/null 2>&1; then
+  # RPM systems without needs-restarting: running kernel older than the newest installed one.
+  k=$(rpm -q --last kernel 2>/dev/null | head -n 1 | awk '{print $1}')
+  if [ -n "$k" ]; then
+    if [ "$k" = "kernel-$(uname -r)" ]; then echo "reboot=no"; else echo "reboot=yes"; echo "rebootpkg=$k"; fi
+  fi
+fi
+if [ -x /usr/lib/update-notifier/apt-check ]; then
+  r=$($T /usr/lib/update-notifier/apt-check 2>&1 >/dev/null | tail -n 1)
+  case "$r" in *[0-9]\;[0-9]*) echo "apt=$r" ;; esac
+elif command -v apt-get >/dev/null 2>&1; then
+  s=$($T apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep '^Inst ')
+  n=$(printf '%s' "$s" | grep -c '^Inst ')
+  sec=$(printf '%s' "$s" | grep -ci 'security')
+  echo "apt=$n;$sec"
+elif command -v dnf >/dev/null 2>&1; then
+  n=$($T dnf -q --cacheonly check-update 2>/dev/null | grep -cE '^[^ ]+[.][^ ]+ +[^ ]+ +[^ ]+$')
+  sec=$($T dnf -q --cacheonly check-update --security 2>/dev/null | grep -cE '^[^ ]+[.][^ ]+ +[^ ]+ +[^ ]+$')
+  echo "dnf=$n;$sec"
+elif command -v yum >/dev/null 2>&1; then
+  n=$($T yum -q -C check-update 2>/dev/null | grep -cE '^[^ ]+[.][^ ]+ +[^ ]+ +[^ ]+$')
+  sec=$($T yum -q -C --security check-update 2>/dev/null | grep -cE '^[^ ]+[.][^ ]+ +[^ ]+ +[^ ]+$')
+  echo "yum=$n;$sec"
+elif command -v apk >/dev/null 2>&1; then
+  echo "apk=$($T apk -u list 2>/dev/null | grep -c .)"
+fi
+
 echo "===DOCKER==="
 # Docker first, then Podman (a podman-docker shim reports "podman" in --version).
 D=""

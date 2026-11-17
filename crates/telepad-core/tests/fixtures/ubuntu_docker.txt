@@ -4,6 +4,8 @@ docker01
 PRETTY_NAME="Ubuntu 24.04.1 LTS"
 NAME="Ubuntu"
 VERSION="24.04.1 LTS (Noble Numbat)"
+ID=ubuntu
+VERSION_ID="24.04"
 ===UNAME===
 Linux
 6.8.0-45-generic
@@ -51,6 +53,12 @@ Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
 tcp   LISTEN 0      128          0.0.0.0:22         0.0.0.0:*
 tcp   LISTEN 0      4096         0.0.0.0:8080       0.0.0.0:*
 tcp   LISTEN 0      4096            [::]:8080          [::]:*
+===UPDATES===
+today=2026-11-17
+reboot=yes
+rebootpkg=linux-image-6.8.0-49-generic
+rebootpkg=linux-base
+apt=12;3
 ===DOCKER===
 RUNTIME Docker version 29.8.0, build 88096ef
 aaaaaaaaaaaa1111|web|nginx:1.27|running|Up 3 days|shop|/data/compose/47|/data/compose/47/docker-compose.yml|0.0.0.0:8080->80/tcp, [::]:8080->80/tcp

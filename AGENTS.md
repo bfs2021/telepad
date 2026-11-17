@@ -50,6 +50,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 | `src/script.sh` | Remote read-only collection script, `===SECTION===` markers |
 | `src/bmc_setup.sh` | Interactive, user-started BMC (`ipmitool`) setup — see Conventions |
 | `src/parse.rs` | Pure parsers for each section, unit-tested against `tests/fixtures/` |
+| `src/eol.rs` | End-of-support dates per distribution release + date arithmetic (update when vendors publish new releases) |
 | `src/model.rs` | Report data types (serde `Serialize`) and formatting helpers |
 | `src/update.rs` | Self-update: GitHub `releases/latest` over HTTPS (`ureq`), SemVer check, SHA-256 from the release's `.sha256`, replace both exes (`self_replace`), relaunch |
 | `src/platform.rs` | Everything OS-specific: ssh binary lookup, hidden console, open terminal / RDP / URL, ping |
@@ -180,7 +181,7 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #21 | feat(ui): Telepad app icon | closed | 2026-11-17 |
 | #23 | fix(ui): IdentityFile Browse cannot reach ~/.ssh on macOS | closed | 2026-11-17 |
 | #9 | feat(release): macOS Telepad.app in a .dmg (unsigned) | closed | 2026-11-17 |
-| #25 | feat(collector): overview flags for reboot needed, pending updates and end-of-life OS | open | 2026-11-17 |
+| #25 | feat(collector): overview flags for reboot needed, pending updates and end-of-life OS | ready-for-review | 2026-11-17 |
 | #26 | feat(docker): container shell, actions and compose/run command view | open | 2026-11-17 |
 | #27 | feat(ui): light / dark / system theme switch | open | 2026-11-17 |
 | #28 | feat(cluster): Docker Swarm and Kubernetes panel | open | 2026-11-17 |

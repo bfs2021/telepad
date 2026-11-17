@@ -41,9 +41,11 @@ pub fn parse_report(output: &str) -> HostReport {
         ..Default::default()
     };
 
-    let (name, pretty) = parse_os_release(get("OSRELEASE"));
-    r.os_name = name;
-    r.os_pretty = pretty;
+    let os = parse_os_release(get("OSRELEASE"));
+    r.os_name = os.name;
+    r.os_pretty = os.pretty;
+    r.os_id = os.id;
+    r.os_version_id = os.version_id;
     let uname = get("UNAME");
     r.os_type = uname.first().cloned().unwrap_or_default();
     r.kernel = uname.get(1).cloned().unwrap_or_default();
@@ -83,6 +85,15 @@ pub fn parse_report(output: &str) -> HostReport {
     r.bmc_error = bmc_error;
     r.sensors.extend(bmc);
     r.listeners = parse_listen(get("LISTEN"));
+    r.maintenance = parse_maintenance(
+        get("UPDATES"),
+        &OsRelease {
+            name: r.os_name.clone(),
+            pretty: r.os_pretty.clone(),
+            id: r.os_id.clone(),
+            version_id: r.os_version_id.clone(),
+        },
+    );
     r.docker = parse_docker(s.get("DOCKER").map(Vec::as_slice), get("DOCKERNET"));
     r
 }
@@ -91,7 +102,15 @@ fn unquote(v: &str) -> String {
     v.trim().trim_matches('"').trim_matches('\'').to_string()
 }
 
-pub fn parse_os_release(lines: &[String]) -> (String, String) {
+#[derive(Debug, Default, PartialEq)]
+pub struct OsRelease {
+    pub name: String,
+    pub pretty: String,
+    pub id: String,
+    pub version_id: String,
+}
+
+pub fn parse_os_release(lines: &[String]) -> OsRelease {
     let mut kv = HashMap::new();
     for l in lines {
         if let Some((k, v)) = l.split_once('=') {
@@ -107,7 +126,44 @@ pub fn parse_os_release(lines: &[String]) -> (String, String) {
             .unwrap_or_default();
         format!("{name} {ver}").trim().to_string()
     });
-    (name, pretty)
+    OsRelease {
+        name,
+        pretty,
+        id: kv.get("ID").cloned().unwrap_or_default(),
+        version_id: kv.get("VERSION_ID").cloned().unwrap_or_default(),
+    }
+}
+
+/// `===UPDATES===`: `today=`, `reboot=yes|no`, `rebootpkg=`, and one of
+/// `apt=N;S` (updates;security), `dnf=N;S`, `yum=N`, `apk=N`.
+pub fn parse_maintenance(lines: &[String], os: &OsRelease) -> Maintenance {
+    let mut m = Maintenance::default();
+    for l in lines {
+        let Some((k, v)) = l.split_once('=') else {
+            continue;
+        };
+        let v = v.trim();
+        match k.trim() {
+            "today" if crate::eol::days_from_iso(v).is_some() => m.today = Some(v.to_string()),
+            "reboot" => {
+                m.reboot_required = match v {
+                    "yes" => Some(true),
+                    "no" => Some(false),
+                    _ => None,
+                }
+            }
+            "rebootpkg" if !v.is_empty() => m.reboot_packages.push(v.to_string()),
+            "apt" | "dnf" | "yum" | "apk" => {
+                let mut parts = v.split(';').map(str::trim);
+                m.updates = parts.next().and_then(|n| n.parse().ok());
+                m.security_updates = parts.next().and_then(|n| n.parse().ok());
+            }
+            _ => {}
+        }
+    }
+    m.end_of_support =
+        crate::eol::end_of_support(&os.id, &os.version_id, &os.pretty).map(str::to_string);
+    m
 }
 
 fn stat_fields(line: &str) -> Option<(u64, u64)> {
@@ -486,6 +542,61 @@ mod tests {
 
     const SAMPLE: &str = include_str!("../tests/fixtures/ubuntu_docker.txt");
     const BUSYBOX: &str = include_str!("../tests/fixtures/busybox_nodocker.txt");
+
+    #[test]
+    fn maintenance_from_fixture_and_other_package_managers() {
+        let r = parse_report(SAMPLE);
+        assert_eq!(
+            (r.os_id.as_str(), r.os_version_id.as_str()),
+            ("ubuntu", "24.04")
+        );
+        let m = &r.maintenance;
+        assert_eq!(m.today.as_deref(), Some("2026-11-17"));
+        assert_eq!(m.reboot_required, Some(true));
+        assert_eq!(
+            m.reboot_packages,
+            ["linux-image-6.8.0-49-generic", "linux-base"]
+        );
+        assert_eq!((m.updates, m.security_updates), (Some(12), Some(3)));
+        assert_eq!(m.end_of_support.as_deref(), Some("2029-05-31"));
+        assert!(matches!(
+            m.support(),
+            Some(crate::eol::Support::Supported { .. })
+        ));
+        assert!(m.needs_attention());
+
+        let quiet = parse_report(BUSYBOX).maintenance;
+        assert_eq!(quiet, Maintenance::default(), "no section, nothing known");
+        assert!(!quiet.needs_attention());
+
+        let lines = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let rocky = OsRelease {
+            id: "centos".into(),
+            version_id: "7".into(),
+            pretty: "CentOS Linux 7 (Core)".into(),
+            ..Default::default()
+        };
+        let m = parse_maintenance(
+            &lines(&["today=2026-11-17", "reboot=no", "dnf=4;1"]),
+            &rocky,
+        );
+        assert_eq!(
+            (m.reboot_required, m.updates, m.security_updates),
+            (Some(false), Some(4), Some(1))
+        );
+        assert!(
+            matches!(m.support(), Some(crate::eol::Support::Ended { .. })),
+            "CentOS 7 is past end of support"
+        );
+        let m = parse_maintenance(
+            &lines(&["today=garbage", "apk=0", "reboot=maybe"]),
+            &OsRelease::default(),
+        );
+        assert_eq!(
+            (m.today, m.updates, m.security_updates, m.reboot_required),
+            (None, Some(0), None, None)
+        );
+    }
 
     #[test]
     fn parses_full_linux_host() {
