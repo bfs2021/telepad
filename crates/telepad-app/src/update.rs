@@ -29,6 +29,7 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
             d.compact_host_list = ui_prefs.compact_host_list;
             d.group_by_status = ui_prefs.group_by_status;
             d.overview_cards = ui_prefs.overview_cards;
+            d.theme = ui_prefs.theme;
             if let Some(src) = imported_from {
                 say(
                     m,
@@ -107,6 +108,12 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
             }
         }
         Msg::SetSort(sort) => d.sort = sort,
+        Msg::SetTheme(theme) => {
+            if d.theme != theme {
+                d.theme = theme;
+                fx.push(Effect::SaveUiPrefs(d.ui_prefs()));
+            }
+        }
         Msg::UiPrefsSaved(Ok(())) => {}
         Msg::UiPrefsSaved(Err(e)) => say(m, now, format!("Cannot save view settings: {e}")),
         Msg::SelectAlias(alias) => {

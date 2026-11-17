@@ -96,6 +96,19 @@ pub fn top_bar(ui: &mut egui::Ui, m: &Model, d: &mut Drafts, out: &mut Vec<Msg>)
                 .suffix(" s"),
         );
         ui.separator();
+        let theme = d.theme;
+        egui::ComboBox::from_id_salt("theme")
+            .selected_text(format!("Theme: {}", theme.title()))
+            .show_ui(ui, |ui| {
+                for t in telepad_core::store::ThemePref::ALL {
+                    if ui.selectable_label(theme == t, t.title()).clicked() {
+                        out.push(Msg::SetTheme(t));
+                    }
+                }
+            })
+            .response
+            .on_hover_text("System follows your Windows / macOS setting");
+        ui.separator();
         ui.label(RichText::new(icons::SEARCH).size(16.0));
         ui.add(
             egui::TextEdit::singleline(&mut d.filter)

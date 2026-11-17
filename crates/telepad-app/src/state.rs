@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use telepad_core::config::{Access, HostEntry, Inventory};
 use telepad_core::model::HostReport;
-use telepad_core::store::{self, ImportMode, ImportSummary, UiPrefs};
+use telepad_core::store::{self, ImportMode, ImportSummary, ThemePref, UiPrefs};
 use telepad_core::update::{Check, UpdateConfig};
 
 /// How long a status-bar message stays visible.
@@ -56,6 +56,8 @@ pub struct Drafts {
     pub group_by_status: bool,
     /// Overview as cards instead of the table. Saved in the database.
     pub overview_cards: bool,
+    /// System / Light / Dark. Saved in the database.
+    pub theme: ThemePref,
 }
 
 impl Default for Drafts {
@@ -72,6 +74,7 @@ impl Default for Drafts {
             compact_host_list: true,
             group_by_status: false,
             overview_cards: false,
+            theme: ThemePref::System,
         }
     }
 }
@@ -248,6 +251,7 @@ impl Drafts {
             compact_host_list: self.compact_host_list,
             group_by_status: self.group_by_status,
             overview_cards: self.overview_cards,
+            theme: self.theme,
         }
     }
 }

@@ -45,6 +45,43 @@ pub struct ImportSummary {
     pub removed: usize,
 }
 
+/// Colour theme: follow the OS, or always light / dark.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ThemePref {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemePref {
+    pub const ALL: [ThemePref; 3] = [Self::System, Self::Light, Self::Dark];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::Light => "light",
+            Self::Dark => "dark",
+        }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::System => "System",
+            Self::Light => "Light",
+            Self::Dark => "Dark",
+        }
+    }
+
+    pub fn parse(s: &str) -> Self {
+        match s.trim() {
+            "light" => Self::Light,
+            "dark" => Self::Dark,
+            _ => Self::System,
+        }
+    }
+}
+
 /// View settings kept in the database so they survive restarts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UiPrefs {
@@ -54,6 +91,7 @@ pub struct UiPrefs {
     pub group_by_status: bool,
     /// Overview as cards instead of the table.
     pub overview_cards: bool,
+    pub theme: ThemePref,
 }
 
 impl Default for UiPrefs {
@@ -62,6 +100,7 @@ impl Default for UiPrefs {
             compact_host_list: true,
             group_by_status: false,
             overview_cards: false,
+            theme: ThemePref::System,
         }
     }
 }
@@ -235,21 +274,26 @@ impl Store {
             compact_host_list: flag("ui_compact_host_list", d.compact_host_list)?,
             group_by_status: flag("ui_group_by_status", d.group_by_status)?,
             overview_cards: flag("ui_overview_cards", d.overview_cards)?,
+            theme: self
+                .setting("ui_theme")?
+                .map_or(d.theme, |v| ThemePref::parse(&v)),
         })
     }
 
     pub fn set_ui_prefs(&self, p: &UiPrefs) -> Result<(), StoreError> {
+        let flag = |v: bool| if v { "1" } else { "0" };
         let rows = [
-            ("ui_compact_host_list", p.compact_host_list),
-            ("ui_group_by_status", p.group_by_status),
-            ("ui_overview_cards", p.overview_cards),
+            ("ui_compact_host_list", flag(p.compact_host_list)),
+            ("ui_group_by_status", flag(p.group_by_status)),
+            ("ui_overview_cards", flag(p.overview_cards)),
+            ("ui_theme", p.theme.as_str()),
         ];
         let tx = self.conn.unchecked_transaction()?;
         for (k, v) in rows {
             tx.execute(
                 "INSERT INTO settings(key, value) VALUES(?1, ?2)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                params![k, if v { "1" } else { "0" }],
+                params![k, v],
             )?;
         }
         tx.commit()?;
@@ -736,6 +780,7 @@ mod tests {
             compact_host_list: false,
             group_by_status: true,
             overview_cards: true,
+            theme: ThemePref::Light,
         };
         s.set_ui_prefs(&p).unwrap();
         assert_eq!(s.ui_prefs().unwrap(), p);

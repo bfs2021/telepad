@@ -47,7 +47,7 @@ pub fn docker_summary(ui: &mut egui::Ui, r: &HostReport, host_ip: &str) {
                         if ports.is_empty() { "9001".to_string() } else { ports }
                     ),
                 };
-                ui.label(RichText::new(text).color(PORTAINER_COLOR));
+                ui.label(RichText::new(text).color(portainer_color()));
             }
             let (mut pt, mut cp, mut st) = (0, 0, 0);
             for (_, cs) in r.docker.stacks() {
@@ -72,7 +72,7 @@ pub fn docker_summary(ui: &mut egui::Ui, r: &HostReport, host_ip: &str) {
 pub fn manager_text(m: &Manager) -> (String, Color32) {
     match m {
         Manager::Portainer { stack_id } => {
-            (format!("Portainer stack #{stack_id}"), PORTAINER_COLOR)
+            (format!("Portainer stack #{stack_id}"), portainer_color())
         }
         Manager::Compose { dir, files } => {
             let file = files.rsplit(['/', '\\']).next().unwrap_or(files);
@@ -81,12 +81,9 @@ pub fn manager_text(m: &Manager) -> (String, Color32) {
             } else {
                 format!(" ({file})")
             };
-            (
-                format!("docker compose in {dir}{f}"),
-                Color32::from_rgb(0xa0, 0x7c, 0xd8),
-            )
+            (format!("docker compose in {dir}{f}"), pal().purple)
         }
-        Manager::Standalone => ("docker run (no compose)".into(), Color32::GRAY),
+        Manager::Standalone => ("docker run (no compose)".into(), pal().grey),
     }
 }
 
@@ -189,9 +186,9 @@ pub fn docker_stacks(ui: &mut egui::Ui, r: &HostReport) {
                         ui.painter().circle_filled(rect.center(), 4.5, dot);
                         let mut n = RichText::new(&c.name).strong();
                         if c.is_nginx() {
-                            n = n.color(NGINX_COLOR);
+                            n = n.color(nginx_color());
                         } else if c.portainer_role().is_some() {
-                            n = n.color(PORTAINER_COLOR);
+                            n = n.color(portainer_color());
                         }
                         let resp = ui.label(n);
                         if c.mounts_socket {

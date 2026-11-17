@@ -18,6 +18,11 @@ Status dot: green = last check succeeded, red = it failed, blue = first check ru
 grey = no result yet (or not monitored). Usage bars turn yellow and red as they fill; temperatures are blue
 below 70 °C, yellow from 70 °C and red from 85 °C.
 
+## Theme
+
+**Theme** in the top bar switches between **System** (follows the Windows / macOS / desktop
+setting, the default), **Light** and **Dark**. The choice is saved in the database.
+
 ## Host list
 
 The list on the left has two views, switched with **View: Compact / Detailed** at its top:

@@ -1,6 +1,6 @@
 //! Sensors section of the host detail: fans, temperatures, BMC hint.
 
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, RichText};
 use telepad_app::Msg;
 
 use crate::icons::{self, label as il};
@@ -61,7 +61,7 @@ pub fn sensors(ui: &mut egui::Ui, r: &HostReport, i: usize, out: &mut Vec<Msg>) 
                     ui.add(
                         egui::ProgressBar::new((s.value / max).clamp(0.0, 1.0))
                             .desired_width(220.0)
-                            .fill(Color32::from_rgb(0x2b, 0x8a, 0xd6))
+                            .fill(crate::widgets::info_fill())
                             .text(format!("{:.0} RPM", s.value)),
                     );
                     ui.end_row();
