@@ -41,9 +41,10 @@ or container name.
 
 ## Host detail
 
-The header shows the alias, description, address and OS logo with buttons
-**SSH** / **RDP**, **Copy ssh command**, **Refresh**, **Edit**, **Clone** and **Delete**.
-Below it:
+The header shows the status, OS logo, alias and `user@address`. Below it are the buttons
+**Open SSH** / **Open RDP**, **Copy ssh command**, **Refresh**, then **Edit**, **Clone** and
+**Delete**. On a narrow window the buttons (and the top bar) wrap onto a second line instead
+of being cut off. Below that:
 
 - **System**: OS, kernel, architecture, uptime, CPU model and cores, load average.
 - **Usage**: CPU, Memory and Swap bars.

@@ -2,6 +2,14 @@
 
 Newest first.
 
+## [2026-11-17] — fix(ui): detail header and top bar wrap instead of clipping (#5)
+- Host detail header split into a wrapping identity row and a wrapping button row; order
+  Open SSH/RDP, Copy ssh command, Refresh | Edit, Clone, Delete (destructive last).
+- Top bar wraps too: at the 900-unit minimum width the loading count was cut off.
+- Verified on Windows (200 % scaling) at 1800 px and 2560 px wide via UI Automation: every
+  header and top-bar button lies inside the window; at minimum width Delete and the
+  loading count move to a second line. Test used documentation-IP hosts only.
+
 ## [2026-11-17] — feat(ui): sortable, resizable overview columns (#4)
 - Overview rebuilt with `egui_extras::TableBuilder`: click a header to sort (natural
   direction, reversed, then inventory order), caret icon shows the direction; drag header

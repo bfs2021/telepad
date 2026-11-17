@@ -20,7 +20,9 @@ pub fn detail(
     nginx_only: &mut bool,
     out: &mut Vec<Msg>,
 ) {
-    ui.horizontal(|ui| {
+    // Two wrapping rows: on a narrow window the buttons move to the next line
+    // instead of running off the right edge.
+    ui.horizontal_wrapped(|ui| {
         status_dot(ui, h);
         icons::os_logo(ui, host_os(h), 26.0);
         ui.heading(&h.entry.alias);
@@ -28,7 +30,8 @@ pub fn detail(
         if h.entry.port != h.entry.access.default_port() {
             ui.label(format!("port {}", h.entry.port));
         }
-        ui.separator();
+    });
+    ui.horizontal_wrapped(|ui| {
         let rdp = h.entry.access == Access::Rdp;
         let open = if rdp { "Open RDP" } else { "Open SSH" };
         if ui.button(il(connect_icon(&h.entry), open)).clicked() {
@@ -37,6 +40,16 @@ pub fn detail(
         if !rdp && ui.button(il(icons::COPY, "Copy ssh command")).clicked() {
             out.push(Msg::CopySsh(i));
         }
+        if ui
+            .add_enabled(!h.loading, egui::Button::new(il(icons::REFRESH, "Refresh")))
+            .clicked()
+        {
+            out.push(Msg::Refresh(i));
+        }
+        if h.loading {
+            ui.spinner();
+        }
+        ui.separator();
         if ui.button(il(icons::EDIT, "Edit")).clicked() {
             out.push(Msg::Edit(i));
         }
@@ -49,15 +62,6 @@ pub fn detail(
         }
         if ui.button(il(icons::TRASH, "Delete")).clicked() {
             out.push(Msg::Delete(i));
-        }
-        if ui
-            .add_enabled(!h.loading, egui::Button::new(il(icons::REFRESH, "Refresh")))
-            .clicked()
-        {
-            out.push(Msg::Refresh(i));
-        }
-        if h.loading {
-            ui.spinner();
         }
     });
     if !h.entry.note.is_empty() {
