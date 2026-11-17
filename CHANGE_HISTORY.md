@@ -2,6 +2,18 @@
 
 Newest first.
 
+## [2026-11-17] — feat(release): macOS Telepad.app in a .dmg (#9)
+- `package-unix.sh` on macOS also builds `Telepad.app` (Info.plist, both programs, licences),
+  ad-hoc signs it (`codesign -s -`; no Apple Developer account, so not notarized) and packs
+  it with an Applications link into `telepad-<ver>-macos-<arch>.dmg` (+ LF `.sha256`).
+- No portable marker in the app: data in `~/Library/Application Support/Telepad`.
+- Self-update inside a `.app` re-applies the ad-hoc signature after swapping the executable
+  (`platform::after_self_update`), so the bundle stays valid.
+- Release workflow mounts each `.dmg` read-only and checks the Applications link, both
+  executables, no marker, `plutil -lint`, `codesign --verify`, `telepad-check --help`.
+- Not verified on a real Mac: install by drag, first start through Gatekeeper, and an
+  in-app update of the bundle (CI only).
+
 ## [2026-11-17] — feat(release): Windows installer alongside the portable zip (#10)
 - `installer/telepad.iss` (Inno Setup 6): per-user install to `%LOCALAPPDATA%\Programs\Telepad`
   (no admin), Start-menu entry, optional desktop icon, uninstaller; data is kept.

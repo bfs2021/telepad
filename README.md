@@ -55,17 +55,24 @@ choose **More info → Run anyway**.
 
 ### macOS
 
-1. Download `telepad-<version>-macos-aarch64.zip` (Apple silicon) or
-   `telepad-<version>-macos-x86_64.zip` (Intel) from
-   [Releases](https://github.com/yohannaftali/telepad/releases), and unzip it, e.g. to
-   `~/Applications/telepad/`.
-2. The programs are not notarized, so macOS blocks them the first time. In Terminal, once:
+1. Download `telepad-<version>-macos-aarch64.dmg` (Apple silicon) or
+   `telepad-<version>-macos-x86_64.dmg` (Intel) from
+   [Releases](https://github.com/yohannaftali/telepad/releases), open it and drag
+   **Telepad** to **Applications**.
+2. Telepad is not notarized by Apple, so the first start is blocked. Either right-click
+   Telepad in Applications → **Open** → **Open**, or run once in Terminal:
 
    ```sh
-   cd ~/Applications/telepad-*/ && xattr -dr com.apple.quarantine .
+   xattr -dr com.apple.quarantine /Applications/Telepad.app
    ```
 
-3. Start `./telepad` (or double-click it in Finder). **Open SSH** uses Terminal.app.
+3. Start Telepad from Applications or Launchpad. **Open SSH** uses Terminal.app.
+
+Hosts and settings live in `~/Library/Application Support/Telepad/telepad.db`; put an
+OpenSSH config there as `config` to import it on the first start, or use
+**☰ Hosts → Import ~/.ssh/config**. A portable zip (`telepad-<version>-macos-<arch>.zip`)
+is also published; it keeps its data next to the program and needs the same `xattr` step
+for its folder.
 
 ### Linux
 

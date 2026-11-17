@@ -376,7 +376,8 @@ fn install_executables(new: &NewExecutables) -> Result<(), String> {
         return Err(format!("cannot replace {check_name} (is it running?): {e}"));
     }
     self_replace::self_replace(&new.monitor)
-        .map_err(|e| format!("cannot replace {monitor_name}: {e}"))
+        .map_err(|e| format!("cannot replace {monitor_name}: {e}"))?;
+    crate::platform::after_self_update(&exe)
 }
 
 /// Start the (new) exe with the same arguments; the caller then exits.

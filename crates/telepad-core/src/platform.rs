@@ -85,6 +85,43 @@ pub fn user_data_dir() -> Option<PathBuf> {
     }
 }
 
+/// The `.app` bundle an executable lives in (`…/Telepad.app/Contents/MacOS/telepad`).
+pub fn app_bundle_of(exe: &std::path::Path) -> Option<PathBuf> {
+    let macos = exe.parent()?;
+    let contents = macos.parent()?;
+    let bundle = contents.parent()?;
+    let is_bundle = macos.file_name()? == "MacOS"
+        && contents.file_name()? == "Contents"
+        && bundle
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("app"));
+    is_bundle.then(|| bundle.to_path_buf())
+}
+
+/// After the updater swapped the executable: inside a macOS `.app`, re-apply the
+/// ad-hoc signature, because replacing a file breaks the bundle's seal and
+/// macOS may then refuse to start it. Elsewhere nothing to do.
+pub fn after_self_update(exe: &std::path::Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    if let Some(bundle) = app_bundle_of(exe) {
+        let out = Command::new("/usr/bin/codesign")
+            .args(["--force", "--deep", "--sign", "-"])
+            .arg(&bundle)
+            .output()
+            .map_err(|e| format!("cannot run codesign: {e}"))?;
+        if !out.status.success() {
+            return Err(format!(
+                "updated, but re-signing {} failed: {}",
+                bundle.display(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = exe;
+    Ok(())
+}
+
 /// Add execute permission (rwxr-xr-x) on Unix; nothing to do on Windows.
 pub fn make_executable(path: &std::path::Path) -> std::io::Result<()> {
     #[cfg(unix)]
@@ -361,6 +398,22 @@ mod tests {
             "'C:\\Users\\IT\\config'"
         );
         assert_eq!(shell_quote("a b'c"), "'a b'\\''c'");
+    }
+
+    #[test]
+    fn finds_the_app_bundle_of_an_executable() {
+        let b = app_bundle_of(std::path::Path::new(
+            "/Applications/Telepad.app/Contents/MacOS/telepad",
+        ));
+        assert_eq!(b, Some(PathBuf::from("/Applications/Telepad.app")));
+        assert_eq!(
+            app_bundle_of(std::path::Path::new("/opt/telepad/telepad")),
+            None
+        );
+        assert_eq!(
+            app_bundle_of(std::path::Path::new("/x/Contents/MacOS/telepad")),
+            None
+        );
     }
 
     #[cfg(unix)]
