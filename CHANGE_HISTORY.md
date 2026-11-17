@@ -2,6 +2,11 @@
 
 Newest first.
 
+## [2026-11-17] — feat(cluster): Docker Swarm and Kubernetes panel (view first, then manage)
+- Issue #28 created on GitHub
+- Scope: telepad-core (script.sh, parsers, model), telepad-app, telepad-gui (cluster panel)
+- Labels: enhancement — phase 2 (management) depends on the #26 decision
+
 ## [2026-11-17] — feat(ui): light / dark / system theme switch
 - Issue #27 created on GitHub
 - Scope: telepad-gui (theme switch, colour contrast), telepad-core (`ui_theme` setting), telepad-app
