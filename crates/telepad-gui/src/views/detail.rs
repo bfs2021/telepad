@@ -168,6 +168,8 @@ pub fn detail(
                 }
             });
 
+            maintenance(ui, &r.maintenance);
+
             section(ui, &il(icons::GAUGE, "Usage"));
             egui::Grid::new("usage")
                 .spacing([16.0, 6.0])
@@ -273,5 +275,73 @@ pub fn detail(
             section(ui, &il(icons::PLUGS, "Ports in use"));
             ports_in_use(ui, r, nginx_only);
             ui.add_space(20.0);
+        });
+}
+
+/// Reboot, pending updates and end of vendor support, with what to do.
+fn maintenance(ui: &mut egui::Ui, m: &telepad_core::model::Maintenance) {
+    use telepad_core::eol::Support;
+    section(ui, &il(icons::WARNING, "Maintenance"));
+    let unknown = || RichText::new("unknown").weak();
+    egui::Grid::new("maint")
+        .spacing([16.0, 4.0])
+        .show(ui, |ui| {
+            ui.label(RichText::new("Reboot").strong());
+            match m.reboot_required {
+                Some(true) => {
+                    let mut t = "required".to_string();
+                    if !m.reboot_packages.is_empty() {
+                        t.push_str(&format!(" ({})", m.reboot_packages.join(", ")));
+                    }
+                    ui.colored_label(usage_color(80.0), t);
+                }
+                Some(false) => {
+                    ui.label("not needed");
+                }
+                None => {
+                    ui.label(unknown());
+                }
+            }
+            ui.end_row();
+            ui.label(RichText::new("Updates").strong());
+            match (m.updates, m.security_updates) {
+                (Some(0), _) => {
+                    ui.label("up to date (local package cache)");
+                }
+                (Some(n), Some(s)) if s > 0 => {
+                    ui.colored_label(usage_color(95.0), format!("{n} pending, {s} security"));
+                }
+                (Some(n), _) => {
+                    ui.label(format!("{n} pending"));
+                }
+                (None, _) => {
+                    ui.label(unknown());
+                }
+            }
+            ui.end_row();
+            ui.label(RichText::new("OS support").strong());
+            let date = m.end_of_support.as_deref().unwrap_or_default();
+            match m.support() {
+                Some(Support::Ended { days_ago }) => {
+                    ui.colored_label(
+                        usage_color(95.0),
+                        format!("ended {date} ({days_ago} days ago) — upgrade the OS release"),
+                    );
+                }
+                Some(Support::EndingSoon { days_left }) => {
+                    ui.colored_label(
+                        usage_color(80.0),
+                        format!("ends {date} (in {days_left} days)"),
+                    );
+                }
+                Some(Support::Supported { .. }) => {
+                    ui.label(format!("supported until {date}"));
+                }
+                None => {
+                    ui.label(unknown())
+                        .on_hover_text("Release not in Telepad's end-of-support table");
+                }
+            }
+            ui.end_row();
         });
 }

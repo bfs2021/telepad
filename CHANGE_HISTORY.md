@@ -2,6 +2,41 @@
 
 Newest first.
 
+## [2026-11-17] — feat(collector): overview flags for reboot, pending updates, end-of-life OS (#25)
+- `script.sh` `===UPDATES===` (read-only, offline): host date, reboot flag
+  (`/var/run/reboot-required` + packages, `needs-restarting -r`, or running kernel older
+  than the newest installed RPM kernel), pending/security update counts (apt-check /
+  `apt-get -s`, dnf/yum `check-update --cacheonly [--security]`, apk).
+- `eol.rs`: end-of-support table (Ubuntu, Debian, CentOS/Stream, RHEL, Rocky, Alma, Oracle,
+  Alpine, openSUSE Leap) and date arithmetic against the host's date; `OsRelease` now
+  carries `ID`/`VERSION_ID`; `HostReport.maintenance`.
+- `telepad-app`: `maintenance_flags` (severity-ordered), `urgency`, sortable `Flags` column.
+- UI: Flags column (table), flag chips (cards), most-urgent icon (compact list),
+  Maintenance section (detail).
+- Verified against real hosts (read-only): Ubuntu 16.04 / 20.04 and CentOS 7 flagged EOL;
+  RHEL 8 security count fixed (advisories → packages, 184 of 247); reboot known on RPM
+  hosts via the kernel check; flags visible in the overview and host list.
+
+## [2026-11-17] — feat(cluster): Docker Swarm and Kubernetes panel (view first, then manage)
+- Issue #28 created on GitHub
+- Scope: telepad-core (script.sh, parsers, model), telepad-app, telepad-gui (cluster panel)
+- Labels: enhancement — phase 2 (management) depends on the #26 decision
+
+## [2026-11-17] — feat(ui): light / dark / system theme switch
+- Issue #27 created on GitHub
+- Scope: telepad-gui (theme switch, colour contrast), telepad-core (`ui_theme` setting), telepad-app
+- Labels: enhancement
+
+## [2026-11-17] — feat(docker): container shell, actions and compose/run command view (Portainer-like)
+- Issue #26 created on GitHub
+- Scope: telepad-core (remote commands), telepad-app, telepad-gui (Docker section)
+- Labels: enhancement — needs the owner's decision on relaxing the read-only rule
+
+## [2026-11-17] — feat(collector): overview flags for reboot needed, pending updates and end-of-life OS
+- Issue #25 created on GitHub
+- Scope: telepad-core (script.sh, parse, model, EOL table), telepad-app, telepad-gui
+- Labels: enhancement
+
 ## [2026-11-17] — fix(ui): choosing an IdentityFile on macOS; key permission hint (#23)
 - Host editor: **Browse…** opens in the current key's folder or `~/.ssh` (hidden on
   macOS/Linux, so it was unreachable from the home folder), with a Cmd+Shift+. hint; an arrow

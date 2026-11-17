@@ -41,7 +41,7 @@ Click **Overview — all hosts** at the top of the host list to see every host a
 
 ### Table
 
-One row per host: **Host**, **Description**, **Address**, **OS**, **CPU**, **Memory**,
+One row per host: **Host**, **Description**, **Address**, **OS**, **Flags**, **CPU**, **Memory**,
 **Fullest disk**, **Temp** (hottest sensor), **Docker** (running/total containers) and
 **Updated** (age of the data). Click a host name to open its detail page; the button at
 the end of a row opens SSH/RDP.
@@ -68,6 +68,22 @@ temperature, Docker summary, how long ago it was checked, and an **SSH** / **RDP
 Unreachable hosts show their error instead of the bars. The search box filters the cards;
 **Sort by** picks the order (the same columns as the table, or inventory order) and the
 arrow button next to it reverses it.
+
+### Maintenance flags
+
+The **Flags** column, the cards, the compact host list and the host's **Maintenance**
+section show what needs doing on a host (hover for details):
+
+| Flag | Meaning | Source on the host (read-only, offline) |
+|---|---|---|
+| red **EOL** | the OS release is past its vendor's end of support: no more security fixes | `/etc/os-release` `ID` + `VERSION_ID` against Telepad's built-in table |
+| yellow **EOL 75d** | support ends within 6 months | same |
+| yellow **reboot** | a reboot is pending (with the packages that asked for it) | `/var/run/reboot-required`, `needs-restarting -r`, or the running kernel older than the newest installed one |
+| **⬇ 12 (3 sec)** | 12 package updates waiting, 3 of them security updates (red when there are security updates) | `apt-check` / `apt-get -s`, `dnf` / `yum check-update --cacheonly`, `apk` |
+
+Update counts come from the host's local package cache, so they are only as fresh as the
+host's last `apt update` / `dnf makecache`. Releases not in the table show "unknown"
+support. Sort by **Flags** to see the most urgent hosts first.
 
 ## Host detail
 

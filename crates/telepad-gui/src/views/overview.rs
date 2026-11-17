@@ -5,7 +5,9 @@
 
 use eframe::egui::{self, RichText};
 use egui_extras::{Column, TableBuilder, TableRow};
-use telepad_app::{HostState, Model, Msg, Sort, SortKey, fullest_disk, hottest, overview_rows};
+use telepad_app::{
+    HostState, Model, Msg, Sort, SortKey, fullest_disk, hottest, maintenance_flags, overview_rows,
+};
 use telepad_core::config::Access;
 use telepad_core::model::{HostReport, PortainerRole, human_kb};
 
@@ -15,12 +17,13 @@ use crate::widgets::*;
 const ROW_HEIGHT: f32 = 24.0;
 
 /// (title, sort key, initial width, minimum width)
-const COLUMNS: [(&str, Option<SortKey>, f32, f32); 12] = [
+const COLUMNS: [(&str, Option<SortKey>, f32, f32); 13] = [
     ("", Some(SortKey::Status), 18.0, 18.0),
     ("Host", Some(SortKey::Host), 130.0, 60.0),
     ("Description", Some(SortKey::Description), 170.0, 40.0),
     ("Address", Some(SortKey::Address), 115.0, 50.0),
     ("OS", Some(SortKey::Os), 190.0, 60.0),
+    ("Flags", Some(SortKey::Flags), 150.0, 40.0),
     ("CPU", Some(SortKey::Cpu), 80.0, 50.0),
     ("Memory", Some(SortKey::Memory), 175.0, 60.0),
     ("Fullest disk", Some(SortKey::Disk), 150.0, 60.0),
@@ -113,7 +116,7 @@ fn host_row(row: &mut TableRow<'_, '_>, i: usize, h: &HostState, out: &mut Vec<M
                 };
                 clipped(ui, msg);
             });
-            for _ in 0..5 {
+            for _ in 0..6 {
                 row.col(|_| {});
             }
         }
@@ -141,6 +144,7 @@ fn report_cells(row: &mut TableRow<'_, '_>, h: &HostState, r: &HostReport) {
         icons::os_logo(ui, host_os(h), 16.0);
         clipped(ui, RichText::new(&r.os_pretty));
     });
+    row.col(|ui| flag_chips(ui, &maintenance_flags(&r.maintenance)));
     row.col(|ui| match r.cpu_usage_pct {
         Some(c) => bar(ui, c, format!("{c:.0}%"), ui.available_width()),
         None => dash(ui),

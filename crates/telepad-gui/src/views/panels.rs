@@ -4,7 +4,8 @@ use std::time::Instant;
 
 use eframe::egui::{self, RichText};
 use telepad_app::{
-    Drafts, HostState, Model, Msg, UpdatePhase, fullest_disk, host_list_groups, worst_usage,
+    Drafts, HostState, Model, Msg, UpdatePhase, fullest_disk, host_list_groups, maintenance_flags,
+    worst_usage,
 };
 use telepad_core::update::CURRENT_VERSION;
 
@@ -277,6 +278,14 @@ fn compact_row(ui: &mut egui::Ui, m: &Model, i: usize, h: &HostState, out: &mut 
                     }
                     bar(ui, pct, format!("{what} {pct:.0}%"), 86.0);
                     ui.response().on_hover_text(tip.trim().to_string());
+                }
+                let flags = maintenance_flags(&r.maintenance);
+                if let Some(top) = flags.first() {
+                    let all: Vec<&str> = flags.iter().map(|f| f.detail.as_str()).collect();
+                    ui.label(
+                        RichText::new(flag_icon(top.kind)).color(severity_color(top.severity)),
+                    )
+                    .on_hover_text(all.join("\n"));
                 }
             } else if let Some(e) = &h.error {
                 ui.label(RichText::new(icons::WARNING).color(usage_color(95.0)))

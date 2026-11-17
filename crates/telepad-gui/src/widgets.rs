@@ -3,7 +3,7 @@
 use std::time::Instant;
 
 use eframe::egui::{self, Color32, RichText};
-use telepad_app::HostState;
+use telepad_app::{Flag, FlagKind, HostState, Severity};
 use telepad_core::config::{Access, HostEntry};
 
 use crate::icons;
@@ -144,6 +144,34 @@ pub fn section(ui: &mut egui::Ui, title: &str) {
     ui.add_space(10.0);
     ui.label(RichText::new(title).heading().size(17.0));
     ui.separator();
+}
+
+pub fn severity_color(s: Severity) -> Color32 {
+    match s {
+        Severity::Danger => usage_color(95.0),
+        Severity::Warn => usage_color(80.0),
+        Severity::Info => Color32::from_rgb(0x4a, 0x90, 0xd9),
+    }
+}
+
+pub fn flag_icon(k: FlagKind) -> &'static str {
+    match k {
+        FlagKind::EndOfSupport => icons::WARNING,
+        FlagKind::Reboot => icons::REFRESH,
+        FlagKind::Updates => icons::IMPORT,
+    }
+}
+
+/// Maintenance flags as coloured icon + short label, details on hover.
+pub fn flag_chips(ui: &mut egui::Ui, flags: &[Flag]) {
+    for f in flags {
+        ui.label(
+            RichText::new(format!("{} {}", flag_icon(f.kind), f.short))
+                .color(severity_color(f.severity))
+                .small(),
+        )
+        .on_hover_text(&f.detail);
+    }
 }
 
 #[cfg(test)]

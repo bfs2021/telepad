@@ -2,7 +2,9 @@
 //! rows and order as the table (search filter + sort).
 
 use eframe::egui::{self, RichText};
-use telepad_app::{HostState, Model, Msg, Sort, fullest_disk, hottest, overview_rows};
+use telepad_app::{
+    HostState, Model, Msg, Sort, fullest_disk, hottest, maintenance_flags, overview_rows,
+};
 use telepad_core::config::Access;
 
 use super::overview::docker_text;
@@ -85,6 +87,10 @@ fn card(ui: &mut egui::Ui, i: usize, h: &HostState, out: &mut Vec<Msg>) {
                 match &h.report {
                     Some(r) => {
                         ui.add(egui::Label::new(RichText::new(&r.os_pretty).small()).truncate());
+                        let flags = maintenance_flags(&r.maintenance);
+                        if !flags.is_empty() {
+                            ui.horizontal_wrapped(|ui| flag_chips(ui, &flags));
+                        }
                         let w = ui.available_width();
                         if let Some(c) = r.cpu_usage_pct {
                             bar(ui, c, format!("CPU {c:.0}%"), w);

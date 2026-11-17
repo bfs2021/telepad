@@ -1,5 +1,6 @@
 pub mod collector;
 pub mod config;
+pub mod eol;
 pub mod model;
 pub mod parse;
 pub mod platform;
