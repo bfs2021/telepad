@@ -2,6 +2,11 @@
 
 Newest first.
 
+## [2026-11-17] — Telepad 0.6.1
+- Update check no longer uses the GitHub API, so offices sharing one IP see updates again;
+  failed checks retried after 30 minutes (#34).
+- New: **Install automatically** in Software update… (off by default) (#34).
+
 ## [2026-11-17] — fix(update): check via github.com, retry after failures, automatic install (#34)
 - Cause: the check used `api.github.com` without a token (60 requests/hour per public IP,
   shared by a whole office behind NAT); the automatic check failed silently and only
