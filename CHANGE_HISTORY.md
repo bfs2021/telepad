@@ -2,6 +2,17 @@
 
 Newest first.
 
+## [2026-11-17] — fix(ui): "→" no longer renders as a box (#6)
+- Cause: egui's proportional font (Ubuntu-Light + egui-icons) has no U+2192, so the
+  `Host port → container` header in Docker stacks and the `→ Container` header in Ports in
+  use drew an empty box (monospace port values were fine: Hack has it).
+- Fix: `icons::definitions()` adds Hack as the last fallback of the proportional family, so
+  any symbol the UI font lacks is drawn by the monospace font instead of a box.
+- Guard: GUI test `every_character_in_the_ui_has_a_glyph` scans every string literal in
+  `crates/telepad-gui/src` and every icon constant and checks both font families with the
+  real font setup; it fails (naming file:line) without the fallback.
+- Verified on Windows against a real Docker host (read-only): the headers show the arrow.
+
 ## [2026-11-17] — tested: #4 and #5 pass
 - Windows 11, 200 % scaling, release build; documentation-IP test hosts (unreachable, so
   long errors fill the OS column). Automated with UI Automation and real mouse input.

@@ -121,6 +121,8 @@ in `update()` with a test → run the effect in `runtime.rs` → draw/emit it in
   (trust on first use; changed keys still rejected).
 - Self-update downloads only from `https://github.com/<repo>/releases/download/`, verifies the
   SHA-256 before anything is replaced, and never touches `telepad.db`, `config` or `.env`.
+- UI text may use any character, but the GUI test `every_character_in_the_ui_has_a_glyph` must
+  pass (proportional text falls back to Hack; Phosphor holds the icons).
 - Test data uses documentation addresses (`192.0.2.0/24`, `198.51.100.0/24`) and made-up
   host names — never real inventory.
 - Conventional commits: `feat(collector): ...`, `fix(ui): ...`, referencing the issue (`#12`).
@@ -167,3 +169,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 |----|-------|--------|--------------|
 | #4 | feat(ui): overview table — sortable, resizable columns | closed | 2026-11-17 |
 | #5 | fix(ui): host detail header buttons cut off on narrow windows | closed | 2026-11-17 |
+| #6 | fix(ui): "→" renders as a box in table headers | ready-for-review | 2026-11-17 |

@@ -38,6 +38,13 @@ pub const WINDOWS: &str = "\u{e692}";
 
 /// Add Phosphor as a fallback font so icon codepoints render in any text.
 pub fn install(ctx: &egui::Context) {
+    ctx.set_fonts(definitions());
+}
+
+/// egui's fonts + Phosphor icons. Proportional text also falls back to the
+/// built-in monospace font (Hack), which has arrows and other symbols the
+/// UI font lacks; without it they draw as an empty box.
+pub fn definitions() -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
     fonts.font_data.insert(
         "phosphor".into(),
@@ -50,7 +57,13 @@ pub fn install(ctx: &egui::Context) {
             list.push("phosphor".into());
         }
     }
-    ctx.set_fonts(fonts);
+    if fonts.font_data.contains_key("Hack")
+        && let Some(list) = fonts.families.get_mut(&FontFamily::Proportional)
+        && !list.iter().any(|f| f == "Hack")
+    {
+        list.push("Hack".into());
+    }
+    fonts
 }
 
 /// `"<icon>  <text>"` for buttons and labels.
@@ -292,5 +305,101 @@ mod tests {
         assert_eq!(d("", "", "MINGW64_NT-10.0", ""), OsKind::Windows);
         assert_eq!(d("", "", "Linux", "5.4"), OsKind::Linux);
         assert_eq!(d("", "", "", ""), OsKind::Unknown);
+    }
+
+    /// Every non-ASCII character in the GUI's string literals, plus every icon
+    /// constant, must have a glyph in both font families (no empty boxes).
+    #[test]
+    fn every_character_in_the_ui_has_a_glyph() {
+        use egui::{FontId, RawInput};
+
+        fn chars_in(dir: &std::path::Path, out: &mut std::collections::BTreeMap<char, String>) {
+            for e in std::fs::read_dir(dir).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    chars_in(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    let text = std::fs::read_to_string(&p).unwrap();
+                    for (n, line) in text.lines().enumerate() {
+                        let code = line.trim_start();
+                        if code.starts_with("//") {
+                            continue;
+                        }
+                        let mut in_str = false;
+                        let mut prev = ' ';
+                        for c in line.chars() {
+                            if c == '"' && prev != '\\' {
+                                in_str = !in_str;
+                            } else if in_str && !c.is_ascii() {
+                                out.entry(c)
+                                    .or_insert_with(|| format!("{}:{}", p.display(), n + 1));
+                            }
+                            prev = c;
+                        }
+                    }
+                }
+            }
+        }
+        let mut used = std::collections::BTreeMap::new();
+        chars_in(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            &mut used,
+        );
+        for icon in [
+            TERMINAL,
+            MONITOR,
+            EDIT,
+            CLONE,
+            COPY,
+            TRASH,
+            PLUS,
+            REFRESH,
+            IMPORT,
+            EXPORT,
+            MENU,
+            SEARCH,
+            CONTAINER,
+            STACK,
+            THERMOMETER,
+            FAN,
+            WARNING,
+            DISKS,
+            NETWORK,
+            GAUGE,
+            OVERVIEW,
+            SAVE,
+            INFO,
+            PLUGS,
+            DATABASE,
+            CARET_DOWN,
+            CARET_UP,
+            CARET_RIGHT,
+            DOT,
+            WINDOWS,
+        ] {
+            for c in icon.chars() {
+                used.entry(c).or_insert_with(|| "icons.rs".to_string());
+            }
+        }
+        assert!(
+            used.contains_key(&'\u{2192}'),
+            "the arrow is still used somewhere"
+        );
+
+        let ctx = egui::Context::default();
+        ctx.set_fonts(definitions());
+        ctx.begin_pass(RawInput::default());
+        let missing: Vec<String> = ctx.fonts_mut(|f| {
+            used.iter()
+                .filter(|(c, _)| {
+                    !f.has_glyph(&FontId::proportional(14.0), **c)
+                        || !f.has_glyph(&FontId::monospace(14.0), **c)
+                })
+                .map(|(c, at)| format!("{c:?} U+{:04X} at {at}", *c as u32))
+                .collect()
+        });
+        // No renderer in a test: drop the font-atlas upload on purpose.
+        ctx.end_pass().textures_delta.clear();
+        assert!(missing.is_empty(), "no glyph for:\n{}", missing.join("\n"));
     }
 }
