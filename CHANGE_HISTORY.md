@@ -2,6 +2,15 @@
 
 Newest first.
 
+## [2026-11-17] — feat(ui): Telepad app icon (#21)
+- Original icon (rounded blue gradient square, white "T", green online dot) drawn by
+  `scripts/make-icon.py`; `assets/icon/` holds PNG (256, 1024), `.ico` (16–256) and `.icns`.
+- Windows: `build.rs` embeds the icon and version info in `telepad.exe`; installer uses it
+  (`SetupIconFile`). All platforms: window icon via `ViewportBuilder::with_icon`.
+  macOS: `Telepad.app/Contents/Resources/telepad.icns` + `CFBundleIconFile`. README header.
+- Verified on Windows: icon extracted from the built exe, title-bar icon in the running
+  app, file properties show "Telepad" 0.5.0.
+
 ## [2026-11-17] — Telepad 0.5.0
 - Windows installer (`…-windows-x86_64-setup.exe`, per-user) next to the portable zip (#10).
 - macOS `Telepad.app` in a `.dmg` per architecture, ad-hoc signed, not notarized (#9).

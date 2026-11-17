@@ -9,11 +9,18 @@ use crate::runtime::Runtime;
 use crate::{icons, views};
 
 pub fn run(cli_config: Option<String>, cli_db: Option<String>) -> eframe::Result<()> {
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_title("Telepad")
+        .with_inner_size([1280.0, 800.0])
+        .with_min_inner_size([900.0, 500.0]);
+    // Window / taskbar / dock icon; a broken image just leaves the default icon.
+    if let Ok(icon) =
+        eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon/telepad.png"))
+    {
+        viewport = viewport.with_icon(icon);
+    }
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("Telepad")
-            .with_inner_size([1280.0, 800.0])
-            .with_min_inner_size([900.0, 500.0]),
+        viewport,
         ..Default::default()
     };
     eframe::run_native(

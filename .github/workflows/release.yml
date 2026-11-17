@@ -110,6 +110,7 @@ jobs:
           test -x "$app/Contents/MacOS/telepad" && test -x "$app/Contents/MacOS/telepad-check"
           test ! -e "$app/Contents/MacOS/portable"
           plutil -lint "$app/Contents/Info.plist"
+          test -f "$app/Contents/Resources/telepad.icns"
           codesign --verify --deep --verbose=2 "$app"
           if [ -z "${{ matrix.target }}" ]; then "$app/Contents/MacOS/telepad-check" --help; fi
 

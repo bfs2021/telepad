@@ -1,3 +1,5 @@
+<img src="crates/telepad-gui/assets/icon/telepad.png" width="96" height="96" alt="Telepad icon" align="right">
+
 # Telepad
 
 A small desktop infrastructure monitor written in Rust. Telepad logs in to your
