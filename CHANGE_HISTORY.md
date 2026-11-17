@@ -2,6 +2,18 @@
 
 Newest first.
 
+## [2026-11-17] — feat(ui): sortable, resizable overview columns (#4)
+- Overview rebuilt with `egui_extras::TableBuilder`: click a header to sort (natural
+  direction, reversed, then inventory order), caret icon shows the direction; drag header
+  borders to resize; cells clip with "…" and show the full text on hover, so errors and
+  long OS names no longer widen columns; sticky header, horizontal scroll when needed.
+- Sorting lives in `telepad-app` (`table.rs`: `Sort`, `SortKey`, `overview_rows`, shared
+  `fullest_disk`/`hottest`), changed only via `Msg::SortBy`; 4 new tests (click cycle,
+  numeric columns, missing values last, numeric IP order + filter).
+- Verified on Windows against 65 real hosts (read-only): CPU sort desc/asc/off and
+  Address sort through UI Automation; screenshots checked for clipping and the arrow.
+- Not verified by automation: dragging a column border (built into TableBuilder).
+
 ## [2026-11-17] — Telepad 0.4.1: macOS and Linux releases
 - Release workflow builds and publishes windows-x86_64, linux-x86_64, linux-aarch64,
   macos-aarch64 and macos-x86_64 zips (+ `.sha256`) in one release; each zip is unpacked and

@@ -31,6 +31,7 @@ pub const INFO: &str = "\u{e2ce}";
 pub const PLUGS: &str = "\u{eb5a}";
 pub const DATABASE: &str = "\u{e1de}";
 pub const CARET_DOWN: &str = "\u{e136}";
+pub const CARET_UP: &str = "\u{e13c}";
 pub const CARET_RIGHT: &str = "\u{e13a}";
 pub const DOT: &str = "\u{e18a}";
 pub const WINDOWS: &str = "\u{e692}";

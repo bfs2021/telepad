@@ -83,6 +83,7 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
             }
         }
         Msg::Select(i) => m.selected = i.filter(|&i| i < m.hosts.len()),
+        Msg::SortBy(key) => d.sort = d.sort.clicked(key),
         Msg::SelectAlias(alias) => {
             m.selected = m.hosts.iter().position(|h| h.entry.alias == alias);
         }

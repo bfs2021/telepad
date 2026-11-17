@@ -11,6 +11,7 @@
 
 mod msg;
 mod state;
+mod table;
 mod update;
 
 pub use msg::{Effect, Msg};
@@ -18,6 +19,7 @@ pub use state::{
     Drafts, Editor, HostState, ImportDialog, MESSAGE_TTL, Model, State, UpdatePhase, UpdateState,
     matches_filter,
 };
+pub use table::{Sort, SortKey, fullest_disk, hottest, overview_rows};
 pub use update::update;
 
 #[cfg(test)]
