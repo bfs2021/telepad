@@ -1,0 +1,15 @@
+===HOSTNAME===
+edge-01
+===KUBE===
+tool=k3s kubectl
+id=6b3f0c1e-2d4a-4b5c-9e8f-7a6b5c4d3e2f
+node=edge-01|True|v1.31.4+k3s1
+node=edge-02|Unknown|v1.31.4+k3s1
+wl=deployments|kube-system|coredns|1|1
+wl=deployments|shop|web|1|2
+wl=statefulsets|shop|db|1|1
+wl=daemonsets|kube-system|svclb-traefik|2|2
+pod=shop|web-7d9c5b8f6-x2k4p|Running|42|CrashLoopBackOff
+pod=shop|report-28890000-abcde|Pending||
+pods=14
+===END===

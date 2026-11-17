@@ -1,0 +1,15 @@
+===HOSTNAME===
+manager-01
+===SWARM===
+info=active|true|q1w2e3r4t5y6u7i8o9p0asdfg|a1b2c3d4e5f6g7h8i9j0klmno
+node={"Availability":"Active","EngineVersion":"27.3.1","Hostname":"manager-01","ID":"a1b2c3d4e5f6g7h8i9j0klmno","ManagerStatus":"Leader","Self":true,"Status":"Ready","TLSStatus":"Ready"}
+node={"Availability":"Active","EngineVersion":"27.3.1","Hostname":"worker-01","ID":"b2c3d4e5f6g7h8i9j0klmnopq","ManagerStatus":"","Self":false,"Status":"Ready","TLSStatus":"Ready"}
+node={"Availability":"Drain","EngineVersion":"26.1.4","Hostname":"worker-02","ID":"c3d4e5f6g7h8i9j0klmnopqrs","ManagerStatus":"","Self":false,"Status":"Down","TLSStatus":"Ready"}
+stack={"Name":"shop","Services":"2"}
+stack={"Name":"shop_api","Services":"1"}
+service={"ID":"s1a2b3c4d5e6","Image":"mariadb:11","Mode":"replicated","Name":"shop_db","Ports":"*:3310->3306/tcp","Replicas":"1/1"}
+service={"ID":"s2b3c4d5e6f7","Image":"nginx:1.27","Mode":"replicated","Name":"shop_web","Ports":"*:8443->443/tcp","Replicas":"1/3"}
+service={"ID":"s3c4d5e6f7g8","Image":"example/api:2.4","Mode":"replicated","Name":"shop_api_worker","Ports":"","Replicas":"2/2"}
+service={"ID":"k8l9m0n1o2p3","Image":"example/agent:1.0","Mode":"global","Name":"node-agent","Ports":"","Replicas":"2/2 (max 1 per node)"}
+task={"CurrentState":"Pending 3 minutes ago","DesiredState":"Running","Error":"no suitable node (insufficient resources on 2 nodes)","ID":"t1a2b3c4d5e6","Image":"nginx:1.27","Name":"shop_web.3","Node":"","Ports":""}
+===END===

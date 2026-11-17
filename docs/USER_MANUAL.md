@@ -145,6 +145,37 @@ docker run \
   mariadb:11
 ```
 
+## Swarm and Kubernetes
+
+When a host is a **Docker Swarm** manager, or can read a **Kubernetes** cluster with
+`kubectl`, `k3s kubectl` or `microk8s kubectl` (its own kubeconfig, or `sudo -n` when
+allowed), the host page gets a **Cluster** section and the overview's Docker cell a badge
+(*Swarm manager*, *Swarm worker*, *k8s*).
+
+- **Swarm**: nodes (status, availability, leader), services with replicas running /
+  wanted, stacks, and tasks that should run but do not. Workers only show their role: the
+  cluster can only be read on a manager.
+- **Kubernetes**: nodes (ready), deployments, statefulsets and daemonsets with ready /
+  wanted pods, and problem pods (not running, waiting such as `CrashLoopBackOff`, or
+  restarted 5 times or more).
+- A degraded cluster (node down, missing replicas, problem pods) raises a red
+  **cluster** flag in the Flags column.
+- Several managers of one cluster, or one machine under two aliases, show the cluster
+  once; the others say "Same cluster as …" with a link.
+
+Actions work like the [Docker actions](#docker-actions): a terminal shows the exact
+command and runs it after you confirm.
+
+| Where | Actions |
+|---|---|
+| Swarm service ☰ | Logs (`docker service logs -f`), Restart (rolling, `service update --force`), Scale… (the terminal asks for the number of replicas) |
+| Swarm node ☰ | Drain, Pause, Activate (`docker node update --availability`) |
+| Swarm stack ☰ | Remove stack (`docker stack rm`, type `yes`) |
+| Kubernetes workload ☰ | Logs, Rollout restart, Scale… (not for daemonsets) |
+
+Collection stays read-only, every cluster command has a time limit, and long lists are
+capped (500 services, 1000 workloads per kind, 100 problem pods).
+
 ## Refreshing
 
 All monitored hosts are checked at start, then every 60 s while **Auto every** is ticked

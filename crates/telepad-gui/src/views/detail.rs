@@ -17,6 +17,7 @@ pub fn detail(
     ui: &mut egui::Ui,
     h: &HostState,
     i: usize,
+    cluster_shown_by: Option<&str>,
     nginx_only: &mut bool,
     out: &mut Vec<Msg>,
 ) {
@@ -270,6 +271,11 @@ pub fn detail(
                         docker_stacks(ui, r, i, host_address(&h.entry), out);
                     }
                 }
+            }
+
+            if super::cluster::has_cluster(r) {
+                section(ui, &il(icons::STACK, "Cluster"));
+                super::cluster::cluster(ui, r, i, cluster_shown_by, out);
             }
 
             section(ui, &il(icons::PLUGS, "Ports in use"));

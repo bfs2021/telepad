@@ -11,6 +11,7 @@
 
 use serde_json::Value;
 
+use crate::cluster::Workload;
 use crate::model::Container;
 use crate::platform::shell_quote;
 
@@ -224,10 +225,27 @@ fn valid_path(p: &str) -> bool {
 pub struct Plan {
     /// Shown in the terminal header and in Telepad's notice.
     pub title: String,
-    /// `compose` = run through `docker compose`, else the runtime itself.
-    compose: bool,
+    tool: Tool,
     args: Vec<String>,
     confirm: Confirm,
+    /// Scale: the replica count is asked in the terminal and appended.
+    scale: Option<Scale>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Tool {
+    Docker,
+    Compose,
+    /// `kubectl`, `k3s kubectl` or `microk8s kubectl`.
+    Kube(&'static str),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Scale {
+    /// `docker service scale <service>=N`
+    Service(String),
+    /// `kubectl scale ... --replicas=N`
+    Replicas,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -242,63 +260,200 @@ impl Plan {
         if !valid_id(&c.id) {
             return Err(format!("unexpected container id {:?}", c.id));
         }
-        Ok(Self {
-            title: format!("{} container {}", action.title(), c.name),
-            compose: false,
-            args: action.argv(&c.id),
-            confirm: confirm(action.changes(), action.destructive()),
-        })
+        Ok(Self::new(
+            format!("{} container {}", action.title(), c.name),
+            Tool::Docker,
+            action.argv(&c.id),
+            confirm(action.changes(), action.destructive()),
+        ))
     }
 
     pub fn stack(p: &ComposeProject, action: StackAction) -> Result<Self, String> {
         p.validate()?;
         let mut args = p.base();
         args.extend(action.argv().iter().map(|s| s.to_string()));
-        Ok(Self {
-            title: format!("{} compose stack {}", action.title(), p.name),
-            compose: true,
+        Ok(Self::new(
+            format!("{} compose stack {}", action.title(), p.name),
+            Tool::Compose,
             args,
-            confirm: confirm(action.changes(), action.destructive()),
-        })
+            confirm(action.changes(), action.destructive()),
+        ))
+    }
+
+    pub fn swarm_service(service: &str, action: ServiceAction) -> Result<Self, String> {
+        if !valid_swarm_name(service) {
+            return Err(format!("unexpected service name {service:?}"));
+        }
+        let (args, confirm, scale): (&[&str], _, _) = match action {
+            ServiceAction::Logs => (
+                &["service", "logs", "-f", "--tail", "200", service],
+                Confirm::None,
+                None,
+            ),
+            // A rolling restart: new tasks replace the old ones one by one.
+            ServiceAction::Restart => (
+                &["service", "update", "--force", service],
+                Confirm::Enter,
+                None,
+            ),
+            ServiceAction::Scale => (
+                &["service", "scale"],
+                Confirm::Enter,
+                Some(Scale::Service(service.to_string())),
+            ),
+        };
+        let mut p = Self::new(
+            format!("{} Swarm service {service}", action.title()),
+            Tool::Docker,
+            strings(args),
+            confirm,
+        );
+        p.scale = scale;
+        Ok(p)
+    }
+
+    pub fn swarm_stack_remove(stack: &str) -> Result<Self, String> {
+        if !valid_swarm_name(stack) {
+            return Err(format!("unexpected stack name {stack:?}"));
+        }
+        Ok(Self::new(
+            format!("Remove Swarm stack {stack}"),
+            Tool::Docker,
+            strings(&["stack", "rm", stack]),
+            Confirm::Yes,
+        ))
+    }
+
+    pub fn swarm_node(node_id: &str, hostname: &str, action: NodeAction) -> Result<Self, String> {
+        if node_id.len() < 12
+            || node_id.len() > 64
+            || !node_id.bytes().all(|b| b.is_ascii_alphanumeric())
+        {
+            return Err(format!("unexpected node id {node_id:?}"));
+        }
+        let availability = match action {
+            NodeAction::Drain => "drain",
+            NodeAction::Pause => "pause",
+            NodeAction::Activate => "active",
+        };
+        Ok(Self::new(
+            format!("{} Swarm node {hostname}", action.title()),
+            Tool::Docker,
+            strings(&["node", "update", "--availability", availability, node_id]),
+            Confirm::Enter,
+        ))
+    }
+
+    pub fn kube_workload(tool: &str, w: &Workload, action: WorkloadAction) -> Result<Self, String> {
+        let tool = KUBE_TOOLS
+            .into_iter()
+            .find(|t| *t == tool)
+            .ok_or_else(|| format!("unexpected kubectl tool {tool:?}"))?;
+        if !valid_kube_name(&w.namespace) || !valid_kube_name(&w.name) {
+            return Err(format!(
+                "unexpected workload name {}/{}",
+                w.namespace, w.name
+            ));
+        }
+        if action == WorkloadAction::Scale && !w.kind.scalable() {
+            return Err(format!("a {} cannot be scaled", w.kind.singular()));
+        }
+        let target = format!("{}/{}", w.kind.singular(), w.name);
+        let ns = w.namespace.as_str();
+        let (args, confirm): (Vec<String>, _) = match action {
+            WorkloadAction::Logs => (
+                strings(&["logs", "-f", "--tail", "200", "-n", ns, &target]),
+                Confirm::None,
+            ),
+            WorkloadAction::Restart => (
+                strings(&["rollout", "restart", "-n", ns, &target]),
+                Confirm::Enter,
+            ),
+            WorkloadAction::Scale => (strings(&["scale", "-n", ns, &target]), Confirm::Enter),
+        };
+        let mut p = Self::new(
+            format!("{} {} {ns}/{}", action.title(), w.kind.singular(), w.name),
+            Tool::Kube(tool),
+            args,
+            confirm,
+        );
+        if action == WorkloadAction::Scale {
+            p.scale = Some(Scale::Replicas);
+        }
+        Ok(p)
+    }
+
+    fn new(title: String, tool: Tool, args: Vec<String>, confirm: Confirm) -> Self {
+        Self {
+            title,
+            tool,
+            args,
+            confirm,
+            scale: None,
+        }
+    }
+
+    fn quoted_args(&self) -> String {
+        let args: Vec<String> = self.args.iter().map(|a| shell_quote(a)).collect();
+        args.join(" ")
+    }
+
+    /// The scale suffix, as shown (`<replicas>`) or as run (`"$n"`).
+    fn scale_suffix(&self, n: &str) -> String {
+        match &self.scale {
+            None => String::new(),
+            Some(Scale::Service(s)) => format!(" {}={n}", shell_quote(s)),
+            Some(Scale::Replicas) => format!(" --replicas={n}"),
+        }
     }
 
     /// The command as the user will see it (runtime shown as `docker`).
     pub fn display(&self) -> String {
-        let prefix = if self.compose {
-            "docker compose"
-        } else {
-            "docker"
+        let prefix = match &self.tool {
+            Tool::Docker => "docker",
+            Tool::Compose => "docker compose",
+            Tool::Kube(t) => t,
         };
-        let args: Vec<String> = self.args.iter().map(|a| shell_quote(a)).collect();
-        format!("{prefix} {}", args.join(" "))
+        format!(
+            "{prefix} {}{}",
+            self.quoted_args(),
+            self.scale_suffix("<replicas>")
+        )
     }
 
     /// The POSIX `sh` script the terminal runs.
     pub fn script(&self) -> String {
-        let args: Vec<String> = self.args.iter().map(|a| shell_quote(a)).collect();
-        let args = args.join(" ");
-        let tool = if self.compose { "\"$C\"" } else { "$D" };
-        let confirm = match self.confirm {
+        let args = self.quoted_args();
+        let runtime = match &self.tool {
+            Tool::Docker => format!("{RUNTIME}T=\"$D\"\n"),
+            Tool::Compose => format!(
+                "{RUNTIME}T=\"$D compose\"\nif ! $D compose version >/dev/null 2>&1 && command -v docker-compose >/dev/null 2>&1; then\n  case \"$D\" in sudo*) T=\"sudo docker-compose\" ;; *) T=docker-compose ;; esac\nfi\n"
+            ),
+            Tool::Kube(t) => format!(
+                "T={q}\nset -- $T\ncommand -v \"$1\" >/dev/null 2>&1 || {{ echo \"$1 is not installed.\"; read _ </dev/tty; exit 1; }}\n$T get nodes -o name >/dev/null 2>&1 || T=\"sudo $T\"\n",
+                q = shell_quote(t)
+            ),
+        };
+        let mut confirm = match self.confirm {
             Confirm::None => String::new(),
             Confirm::Enter => "printf 'Press Enter to run it, or Ctrl+C to cancel. '\nread _ </dev/tty\n".into(),
             Confirm::Yes => "printf 'This cannot be undone. Type yes and press Enter to run it: '\nread ans </dev/tty\n[ \"$ans\" = yes ] || { echo 'Cancelled.'; sleep 2; exit 1; }\n".into(),
         };
-        let tool_line = if self.compose {
-            "C=\"$D compose\"\nif ! $D compose version >/dev/null 2>&1 && command -v docker-compose >/dev/null 2>&1; then\n  case \"$D\" in sudo*) C=\"sudo docker-compose\" ;; *) C=docker-compose ;; esac\nfi\nSHOWN=\"$C\"\n"
-        } else {
-            "SHOWN=\"$D\"\n"
-        };
-        let run = if self.compose {
-            format!("$C {args} </dev/tty")
-        } else {
-            format!("{tool} {args} </dev/tty")
-        };
+        if self.scale.is_some() {
+            confirm = "printf 'New number of replicas (Ctrl+C to cancel): '\nread n </dev/tty\ncase \"$n\" in ''|*[!0-9]*) echo 'Not a number, cancelled.'; sleep 2; exit 1 ;; esac\n".into();
+        }
+        let shown = format!("{args}{}", self.scale_suffix("<replicas>"));
         format!(
-            "{RUNTIME}{tool_line}echo {title}\necho\necho 'Command:'\nprintf '  %s %s\\n\\n' \"$SHOWN\" {shown}\n{confirm}{run}\nrc=$?\necho\nprintf 'Finished (exit %s). Press Enter to close. ' \"$rc\"\nread _ </dev/tty\n",
+            "{runtime}echo {title}\necho\necho 'Command:'\nprintf '  %s %s\\n\\n' \"$T\" {shown}\n{confirm}$T {args}{run_suffix} </dev/tty\nrc=$?\necho\nprintf 'Finished (exit %s). Press Enter to close. ' \"$rc\"\nread _ </dev/tty\n",
             title = shell_quote(&format!("=== Telepad: {} ===", self.title)),
-            shown = shell_quote(&args),
+            shown = shell_quote(&shown),
+            run_suffix = self.scale_suffix("\"$n\""),
         )
     }
+}
+
+fn strings(v: &[&str]) -> Vec<String> {
+    v.iter().map(|s| s.to_string()).collect()
 }
 
 fn confirm(changes: bool, destructive: bool) -> Confirm {
@@ -308,6 +463,92 @@ fn confirm(changes: bool, destructive: bool) -> Confirm {
         Confirm::Enter
     } else {
         Confirm::None
+    }
+}
+
+const KUBE_TOOLS: [&str; 3] = ["kubectl", "k3s kubectl", "microk8s kubectl"];
+
+/// Swarm service / stack names: letters, digits, `_`, `.`, `-`.
+fn valid_swarm_name(s: &str) -> bool {
+    s.len() <= 128
+        && s.bytes().next().is_some_and(|b| b.is_ascii_alphanumeric())
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
+}
+
+/// Kubernetes names and namespaces (DNS-1123).
+fn valid_kube_name(s: &str) -> bool {
+    s.len() <= 253
+        && s.bytes()
+            .next()
+            .is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        && s.bytes()
+            .last()
+            .is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        && s.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'.')
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceAction {
+    Logs,
+    Restart,
+    Scale,
+}
+
+impl ServiceAction {
+    pub const ALL: [ServiceAction; 3] = [Self::Logs, Self::Restart, Self::Scale];
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Logs => "Logs",
+            Self::Restart => "Restart (rolling)",
+            Self::Scale => "Scale…",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeAction {
+    Drain,
+    Pause,
+    Activate,
+}
+
+impl NodeAction {
+    pub const ALL: [NodeAction; 3] = [Self::Drain, Self::Pause, Self::Activate];
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Drain => "Drain",
+            Self::Pause => "Pause",
+            Self::Activate => "Activate",
+        }
+    }
+    /// Offered for a node with this availability (Active / Pause / Drain).
+    pub fn available(self, availability: &str) -> bool {
+        let a = availability.to_ascii_lowercase();
+        match self {
+            Self::Drain => a != "drain",
+            Self::Pause => a == "active",
+            Self::Activate => a != "active",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkloadAction {
+    Logs,
+    Restart,
+    Scale,
+}
+
+impl WorkloadAction {
+    pub const ALL: [WorkloadAction; 3] = [Self::Logs, Self::Restart, Self::Scale];
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Logs => "Logs",
+            Self::Restart => "Rollout restart",
+            Self::Scale => "Scale…",
+        }
     }
 }
 
@@ -601,7 +842,7 @@ mod tests {
         assert_eq!(p.display(), format!("docker stop {ID}"));
         let sc = p.script();
         assert!(sc.contains("Press Enter to run it"));
-        assert!(sc.contains(&format!("$D stop {ID} </dev/tty")));
+        assert!(sc.contains(&format!("$T stop {ID} </dev/tty")));
 
         let p = Plan::container(&c, ContainerAction::Remove).unwrap();
         assert!(p.script().contains("Type yes"), "remove needs yes");
@@ -694,6 +935,87 @@ mod tests {
             "{}",
             String::from_utf8_lossy(&out.stderr)
         );
+    }
+
+    #[test]
+    fn swarm_and_kube_plans() {
+        let p = Plan::swarm_service("shop_web", ServiceAction::Scale).unwrap();
+        assert_eq!(p.display(), "docker service scale shop_web=<replicas>");
+        let sc = p.script();
+        assert!(
+            sc.contains("read n </dev/tty") && sc.contains("*[!0-9]*"),
+            "{sc}"
+        );
+        assert!(
+            sc.contains("$T service scale shop_web=\"$n\" </dev/tty"),
+            "{sc}"
+        );
+        assert_eq!(
+            Plan::swarm_service("shop_web", ServiceAction::Restart)
+                .unwrap()
+                .display(),
+            "docker service update --force shop_web"
+        );
+        assert!(
+            Plan::swarm_stack_remove("shop")
+                .unwrap()
+                .script()
+                .contains("Type yes")
+        );
+        assert!(Plan::swarm_service("x;reboot", ServiceAction::Logs).is_err());
+        assert!(
+            Plan::swarm_node("a1b2c3d4e5f6g7h8i9j0klmno", "w1", NodeAction::Drain)
+                .unwrap()
+                .display()
+                .ends_with("--availability drain a1b2c3d4e5f6g7h8i9j0klmno")
+        );
+        assert!(Plan::swarm_node("$(id)", "w1", NodeAction::Drain).is_err());
+        assert!(NodeAction::Activate.available("Drain") && !NodeAction::Drain.available("Drain"));
+
+        let w = Workload {
+            kind: crate::cluster::WorkloadKind::Deployment,
+            namespace: "shop".into(),
+            name: "web".into(),
+            ready: 1,
+            desired: 2,
+        };
+        let p = Plan::kube_workload("k3s kubectl", &w, WorkloadAction::Scale).unwrap();
+        assert_eq!(
+            p.display(),
+            "k3s kubectl scale -n shop deployment/web --replicas=<replicas>"
+        );
+        assert!(p.script().contains("T='k3s kubectl'"));
+        assert_eq!(
+            Plan::kube_workload("kubectl", &w, WorkloadAction::Restart)
+                .unwrap()
+                .display(),
+            "kubectl rollout restart -n shop deployment/web"
+        );
+        assert!(Plan::kube_workload("rm -rf /", &w, WorkloadAction::Logs).is_err());
+        let mut bad = w.clone();
+        bad.namespace = "Shop;x".into();
+        assert!(Plan::kube_workload("kubectl", &bad, WorkloadAction::Logs).is_err());
+        let mut ds = w.clone();
+        ds.kind = crate::cluster::WorkloadKind::DaemonSet;
+        assert!(Plan::kube_workload("kubectl", &ds, WorkloadAction::Scale).is_err());
+
+        // Every script parses as sh (where a local sh exists).
+        for p in [
+            Plan::swarm_service("shop_web", ServiceAction::Scale).unwrap(),
+            Plan::swarm_stack_remove("shop").unwrap(),
+            Plan::kube_workload("microk8s kubectl", &w, WorkloadAction::Scale).unwrap(),
+        ] {
+            if let Ok(out) = std::process::Command::new("sh")
+                .args(["-n", "-c", &p.script()])
+                .output()
+            {
+                assert!(
+                    out.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
+            }
+        }
     }
 
     #[test]

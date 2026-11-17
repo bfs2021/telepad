@@ -20,8 +20,9 @@ pub use state::{
     UpdateState, matches_filter,
 };
 pub use table::{
-    Flag, FlagKind, HostGroup, Severity, Sort, SortKey, fullest_disk, host_list_groups, hottest,
-    maintenance_flags, overview_rows, urgency, worst_usage,
+    Flag, FlagKind, HostGroup, Severity, Sort, SortKey, cluster_shown_by, fullest_disk, host_flags,
+    host_list_groups, host_urgency, hottest, maintenance_flags, overview_rows, urgency,
+    worst_usage,
 };
 pub use update::update;
 

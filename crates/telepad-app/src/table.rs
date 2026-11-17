@@ -208,7 +208,7 @@ fn sort_value(h: &HostState, key: SortKey) -> Option<Value> {
             .map(|r| Value::Num(r.docker.containers.iter().filter(|c| c.running()).count() as f64)),
         // Most recent first when descending: newer Instants are larger.
         SortKey::Updated => h.updated.map(Value::At),
-        SortKey::Flags => r.map(|r| Value::Num(urgency(&r.maintenance) as f64)),
+        SortKey::Flags => r.map(|r| Value::Num(host_urgency(r) as f64)),
     }
 }
 
@@ -235,6 +235,8 @@ pub enum FlagKind {
     Reboot,
     Updates,
     EndOfSupport,
+    /// Swarm / Kubernetes nodes or services not healthy.
+    Cluster,
 }
 
 /// One maintenance flag: what, how urgent, a short label and a hover text.
@@ -304,6 +306,43 @@ pub fn maintenance_flags(m: &Maintenance) -> Vec<Flag> {
     }
     flags.sort_by_key(|f| std::cmp::Reverse(f.severity));
     flags
+}
+
+/// Maintenance flags plus a degraded Swarm / Kubernetes cluster.
+pub fn host_flags(r: &HostReport) -> Vec<Flag> {
+    let mut flags = maintenance_flags(&r.maintenance);
+    let problems = r.cluster.degraded();
+    if !problems.is_empty() {
+        flags.insert(
+            0,
+            Flag {
+                kind: FlagKind::Cluster,
+                severity: Severity::Danger,
+                short: "cluster".into(),
+                detail: format!("Cluster degraded: {}", problems.join("; ")),
+            },
+        );
+    }
+    flags
+}
+
+/// Sort weight for the Flags column over the whole report.
+pub fn host_urgency(r: &HostReport) -> u64 {
+    let cluster = if r.cluster.degraded().is_empty() {
+        0
+    } else {
+        2_000_000
+    };
+    cluster + urgency(&r.maintenance)
+}
+
+/// Another host earlier in the list that shows the same Swarm / Kubernetes
+/// cluster (several managers, or one machine under two aliases).
+pub fn cluster_shown_by(m: &Model, i: usize) -> Option<usize> {
+    let key = m.hosts.get(i)?.report.as_ref()?.cluster.key()?;
+    m.hosts[..i]
+        .iter()
+        .position(|h| h.report.as_ref().and_then(|r| r.cluster.key()).as_deref() == Some(&key))
 }
 
 /// Sort weight for the Flags column: ended support > reboot > security > updates.

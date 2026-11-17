@@ -51,6 +51,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 | `src/bmc_setup.sh` | Interactive, user-started BMC (`ipmitool`) setup — see Conventions |
 | `src/parse.rs` | Pure parsers for each section, unit-tested against `tests/fixtures/` |
 | `src/docker_actions.rs` | Docker/compose action commands + terminal script (show, confirm, run), read-only "How it runs" (`docker inspect` → `docker run`, compose files, secrets masked) |
+| `src/cluster.rs` | Docker Swarm (managers) and Kubernetes (kubectl / k3s / microk8s) model + parsers for `===SWARM===` / `===KUBE===`; cluster key so several managers show one cluster |
 | `src/eol.rs` | End-of-support dates per distribution release + date arithmetic (update when vendors publish new releases) |
 | `src/model.rs` | Report data types (serde `Serialize`) and formatting helpers |
 | `src/update.rs` | Self-update: GitHub `releases/latest` over HTTPS (`ureq`), SemVer check, SHA-256 from the release's `.sha256`, replace both exes (`self_replace`), relaunch |
@@ -112,7 +113,7 @@ in `update()` with a test → run the effect in `runtime.rs` → draw/emit it in
   Two exceptions, both only in an interactive terminal the user opened, never in the background:
   `telepad-core/src/bmc_setup.sh` ("Set up BMC access…") prints the exact sudo commands, waits for
   Enter and lets sudo ask for the password (installs ipmitool and a read-only sudoers rule, nothing
-  else); and Docker / compose actions (`docker_actions.rs`, owner decision on #26): the terminal
+  else); and Docker / compose / Swarm / Kubernetes actions (`docker_actions.rs`, owner decision on #26): the terminal
   prints the exact command and runs it only after Enter (`yes` for kill / remove / compose down).
   Container IDs, project names and paths from labels are validated and single-quoted.
   Portainer-managed stacks are never changed from Telepad (Open in Portainer only).
@@ -187,6 +188,6 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #23 | fix(ui): IdentityFile Browse cannot reach ~/.ssh on macOS | closed | 2026-11-17 |
 | #9 | feat(release): macOS Telepad.app in a .dmg (unsigned) | closed | 2026-11-17 |
 | #25 | feat(collector): overview flags for reboot needed, pending updates and end-of-life OS | closed | 2026-11-17 |
-| #26 | feat(docker): container shell, actions and compose/run command view | ready-for-review | 2026-11-17 |
+| #26 | feat(docker): container shell, actions and compose/run command view | closed | 2026-11-17 |
 | #27 | feat(ui): light / dark / system theme switch | closed | 2026-11-17 |
-| #28 | feat(cluster): Docker Swarm and Kubernetes panel | open | 2026-11-17 |
+| #28 | feat(cluster): Docker Swarm and Kubernetes panel | ready-for-review | 2026-11-17 |

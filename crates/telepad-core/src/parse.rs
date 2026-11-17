@@ -95,6 +95,8 @@ pub fn parse_report(output: &str) -> HostReport {
         },
     );
     r.docker = parse_docker(s.get("DOCKER").map(Vec::as_slice), get("DOCKERNET"));
+    r.cluster.swarm = crate::cluster::parse_swarm(get("SWARM"));
+    (r.cluster.kube, r.cluster.kube_error) = crate::cluster::parse_kube(get("KUBE"));
     r
 }
 

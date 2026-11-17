@@ -5,7 +5,9 @@ use std::path::PathBuf;
 
 use telepad_core::collector;
 use telepad_core::config::{HostEntry, Inventory};
-use telepad_core::docker_actions::{ContainerAction, Plan, RunInfo, StackAction};
+use telepad_core::docker_actions::{
+    ContainerAction, NodeAction, Plan, RunInfo, ServiceAction, StackAction, WorkloadAction,
+};
 use telepad_core::model::Container;
 use telepad_core::store::{ImportMode, ImportSummary, UiPrefs};
 use telepad_core::update::{Check, UpdateConfig};
@@ -57,6 +59,27 @@ pub enum Msg {
         container: String,
     },
     CloseRunInfo,
+    /// Swarm / Kubernetes actions in a terminal (host index + names from its report).
+    SwarmService {
+        host: usize,
+        service: String,
+        action: ServiceAction,
+    },
+    SwarmStackRemove {
+        host: usize,
+        stack: String,
+    },
+    SwarmNode {
+        host: usize,
+        node_id: String,
+        action: NodeAction,
+    },
+    KubeWorkload {
+        host: usize,
+        namespace: String,
+        name: String,
+        action: WorkloadAction,
+    },
     Select(Option<usize>),
     SelectAlias(String),
     /// Host list: compact (true) or detailed rows.

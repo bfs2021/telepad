@@ -6,7 +6,7 @@
 use eframe::egui::{self, RichText};
 use egui_extras::{Column, TableBuilder, TableRow};
 use telepad_app::{
-    HostState, Model, Msg, Sort, SortKey, fullest_disk, hottest, maintenance_flags, overview_rows,
+    HostState, Model, Msg, Sort, SortKey, fullest_disk, host_flags, hottest, overview_rows,
 };
 use telepad_core::config::Access;
 use telepad_core::model::{HostReport, PortainerRole, human_kb};
@@ -144,7 +144,7 @@ fn report_cells(row: &mut TableRow<'_, '_>, h: &HostState, r: &HostReport) {
         icons::os_logo(ui, host_os(h), 16.0);
         clipped(ui, RichText::new(&r.os_pretty));
     });
-    row.col(|ui| flag_chips(ui, &maintenance_flags(&r.maintenance)));
+    row.col(|ui| flag_chips(ui, &host_flags(r)));
     row.col(|ui| match r.cpu_usage_pct {
         Some(c) => bar(ui, c, format!("{c:.0}%"), ui.available_width()),
         None => dash(ui),
@@ -191,8 +191,13 @@ pub fn docker_text(r: &HostReport) -> Option<String> {
     } else {
         ""
     };
+    let badge = r
+        .cluster
+        .badge()
+        .map(|b| format!(" · {b}"))
+        .unwrap_or_default();
     Some(format!(
-        "{run}/{} running{rt}{role}",
+        "{run}/{} running{rt}{role}{badge}",
         r.docker.containers.len()
     ))
 }
@@ -204,4 +209,28 @@ fn clipped(ui: &mut egui::Ui, text: RichText) {
 
 fn dash(ui: &mut egui::Ui) {
     ui.label(RichText::new("—").weak());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::docker_text;
+    use telepad_core::cluster::{Cluster, Swarm};
+    use telepad_core::model::HostReport;
+
+    #[test]
+    fn docker_cell_shows_the_cluster_badge() {
+        let mut r = HostReport::default();
+        assert_eq!(docker_text(&r).as_deref(), Some("0/0 running"));
+        r.cluster = Cluster {
+            swarm: Some(Swarm {
+                manager: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            docker_text(&r).as_deref(),
+            Some("0/0 running · Swarm manager")
+        );
+    }
 }
