@@ -165,5 +165,5 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 ## Tracked Issues
 | ID | Title | Status | Last Checked |
 |----|-------|--------|--------------|
-| #4 | feat(ui): overview table — sortable, resizable columns | ready-for-review | 2026-11-17 |
-| #5 | fix(ui): host detail header buttons cut off on narrow windows | ready-for-review | 2026-11-17 |
+| #4 | feat(ui): overview table — sortable, resizable columns | closed | 2026-11-17 |
+| #5 | fix(ui): host detail header buttons cut off on narrow windows | closed | 2026-11-17 |
