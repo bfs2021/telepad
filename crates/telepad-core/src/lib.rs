@@ -8,7 +8,41 @@ pub mod update;
 
 use std::path::{Path, PathBuf};
 
-/// Config path: `--config <path>` > `TELEPAD_CONFIG` > `./config` > `config` next to the exe.
+/// File next to the exe that marks a portable copy (shipped in the zips):
+/// data stays next to the program instead of the per-user data folder.
+pub const PORTABLE_MARKER: &str = "portable";
+
+fn exe_dir() -> Option<PathBuf> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_path_buf))
+}
+
+/// Where `telepad.db` lives when neither `--db`, `TELEPAD_DB` nor a `config`
+/// decides it: next to the exe for a portable copy (marker file, or a
+/// `telepad.db` already there), otherwise the per-user data folder.
+pub fn data_dir() -> PathBuf {
+    let exe = exe_dir();
+    choose_data_dir(exe.as_deref(), platform::user_data_dir(), |d| {
+        d.join(PORTABLE_MARKER).is_file() || d.join(DB_FILE).is_file()
+    })
+}
+
+fn choose_data_dir(
+    exe_dir: Option<&Path>,
+    user_dir: Option<PathBuf>,
+    is_portable: impl Fn(&Path) -> bool,
+) -> PathBuf {
+    match (exe_dir, user_dir) {
+        (Some(e), _) if is_portable(e) => e.to_path_buf(),
+        (_, Some(u)) => u,
+        (Some(e), None) => e.to_path_buf(),
+        (None, None) => PathBuf::from("."),
+    }
+}
+
+/// Config path: `--config <path>` > `TELEPAD_CONFIG` > `./config` > `config` next
+/// to the exe > `config` in the data folder.
 pub fn resolve_config(cli: Option<&str>) -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Some(p) = cli {
@@ -18,12 +52,10 @@ pub fn resolve_config(cli: Option<&str>) -> Option<PathBuf> {
         candidates.push(p.into());
     }
     candidates.push("config".into());
-    if let Some(dir) = std::env::current_exe()
-        .ok()
-        .and_then(|e| e.parent().map(Path::to_path_buf))
-    {
+    if let Some(dir) = exe_dir() {
         candidates.push(dir.join("config"));
     }
+    candidates.push(data_dir().join("config"));
     candidates
         .into_iter()
         .find(|p| p.is_file())
@@ -102,19 +134,19 @@ pub fn open_workspace(cli_config: Option<&str>, cli_db: Option<&str>) -> Result<
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("TELEPAD_DB").map(PathBuf::from))
         .unwrap_or_else(|| {
-            // Portable layout: with no `config` around, keep the data next to the exe.
-            let exe_dir = std::env::current_exe()
-                .ok()
-                .and_then(|e| e.parent().map(Path::to_path_buf));
             config
                 .as_deref()
                 .and_then(Path::parent)
                 .map(Path::to_path_buf)
-                .or(exe_dir)
-                .unwrap_or_else(|| PathBuf::from("."))
+                .unwrap_or_else(data_dir)
                 .join(DB_FILE)
         });
     let db = std::path::absolute(&db).map(strip_verbatim).unwrap_or(db);
+    if let Some(dir) = db.parent()
+        && !dir.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
     let mut store = store::Store::open(&db).map_err(|e| format!("{}: {e}", db.display()))?;
 
     let mut imported_from = None;
@@ -151,4 +183,35 @@ pub fn open_ssh_alias(
         .ok_or_else(|| format!("unknown host alias: {alias}"))?;
     let s = ws.settings();
     platform::open_terminal(&s.ssh_program, &s.args(host, false))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn portable_copies_keep_data_next_to_the_exe() {
+        let exe = Path::new("/opt/telepad");
+        let user = PathBuf::from("/home/a/.local/share/telepad");
+        assert_eq!(
+            choose_data_dir(Some(exe), Some(user.clone()), |_| true),
+            exe
+        );
+        assert_eq!(
+            choose_data_dir(Some(exe), Some(user.clone()), |_| false),
+            user,
+            "installed copy uses the per-user folder"
+        );
+        assert_eq!(choose_data_dir(Some(exe), None, |_| false), exe);
+        assert_eq!(choose_data_dir(None, None, |_| false), PathBuf::from("."));
+        assert_eq!(choose_data_dir(None, Some(user.clone()), |_| true), user);
+    }
+
+    #[test]
+    fn user_data_dir_is_named_after_the_app() {
+        if let Some(d) = platform::user_data_dir() {
+            let name = d.file_name().unwrap().to_string_lossy().to_lowercase();
+            assert_eq!(name, "telepad");
+        }
+    }
 }

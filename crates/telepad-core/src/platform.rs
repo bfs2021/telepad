@@ -52,6 +52,39 @@ fn open_url_impl(url: &str) -> std::io::Result<()> {
     Command::new("xdg-open").arg(url).spawn().map(|_| ())
 }
 
+/// Per-user data folder for an installed Telepad: `%APPDATA%\Telepad` on Windows,
+/// `~/Library/Application Support/Telepad` on macOS, `$XDG_DATA_HOME/telepad`
+/// (or `~/.local/share/telepad`) elsewhere.
+pub fn user_data_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("Telepad"))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::env::var_os("HOME").map(|h| {
+            PathBuf::from(h)
+                .join("Library")
+                .join("Application Support")
+                .join("Telepad")
+        })
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::env::var_os("XDG_DATA_HOME")
+            .filter(|d| !d.is_empty())
+            .map(|d| PathBuf::from(d).join("telepad"))
+            .or_else(|| {
+                std::env::var_os("HOME").map(|h| {
+                    PathBuf::from(h)
+                        .join(".local")
+                        .join("share")
+                        .join("telepad")
+                })
+            })
+    }
+}
+
 /// Add execute permission (rwxr-xr-x) on Unix; nothing to do on Windows.
 pub fn make_executable(path: &std::path::Path) -> std::io::Result<()> {
     #[cfg(unix)]

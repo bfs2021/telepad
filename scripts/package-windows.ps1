@@ -1,7 +1,9 @@
-# Build the portable Windows release zip.
-#   pwsh scripts/package-windows.ps1     # dist/telepad-<version>-windows-x86_64.zip (+ .sha256)
+# Build the Windows release files.
+#   pwsh scripts/package-windows.ps1              # dist/telepad-<version>-windows-x86_64.zip (+ .sha256), portable
+#   pwsh scripts/package-windows.ps1 -Installer   # also ...-windows-x86_64-setup.exe (+ .sha256), needs Inno Setup 6
 # Releases are published by .github/workflows/release.yml on a pushed v* tag,
 # for every platform at once (macOS / Linux use scripts/package-unix.sh).
+param([switch]$Installer)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -35,24 +37,27 @@ Host example
 '@ | Set-Content -Encoding utf8 (Join-Path $stage 'config.example')
 
 @"
-Telepad $version - portable (Windows x86_64)
-=============================================
+Telepad $version (Windows x86_64)
+=================================
 
-Run telepad.exe. Nothing is installed; delete the folder to remove it.
+Portable zip: run telepad.exe. Nothing is installed; delete the folder to remove it.
+The file "portable" next to the exe keeps all data in this folder.
+Installer: Telepad is in the Start menu; uninstall it in Settings > Apps.
 
 First start
-  * If a file named "config" (OpenSSH client config) is next to the exe, its hosts
-    are imported into telepad.db automatically.
-  * Otherwise the host list starts empty: use Hosts > Add one host, or Hosts > Import from a file
-    (OpenSSH config or a Telepad JSON export).
+  * If a file named "config" (OpenSSH client config) is next to the exe (or in the
+    data folder), its hosts are imported into telepad.db automatically.
+  * Otherwise the host list starts empty: use Hosts > Add one host, or Hosts > Import
+    from a file (OpenSSH config or JSON), or Hosts > Import ~/.ssh/config.
 
-Files created next to the exe
+Data (portable: next to the exe; installed: %APPDATA%\Telepad)
   telepad.db           host database (SQLite) - back it up / Export to move it
   telepad.ssh_config   generated for ssh, rewritten on every change (do not edit)
+  Uninstalling keeps this data.
 
 Updates
   Telepad checks https://github.com/yohannaftali/telepad/releases at start and
-  every 6 h. "Update now" downloads the new zip, checks its SHA-256 and replaces
+  every 6 h. "Update now" downloads the new version, checks its SHA-256 and replaces
   both exes; your telepad.db and config are kept. Turn it off in
   Hosts > Software update.
 
@@ -69,6 +74,10 @@ Command line
 Telepad only runs read-only commands on monitored hosts.
 "@ | Set-Content -Encoding utf8 (Join-Path $stage 'README.txt')
 
+# Portable marker: only in the zip (the installer copies the files it lists, not this one).
+"Keep Telepad's data (telepad.db) next to telepad.exe. Delete this file to use %APPDATA%\Telepad instead.`n" |
+    Set-Content -Encoding utf8 -NoNewline (Join-Path $stage 'portable')
+
 $zip = Join-Path $dist "$name.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path $stage -DestinationPath $zip
@@ -79,3 +88,21 @@ $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
 Write-Output "zip:    $zip"
 Write-Output "sha256: $hash"
 Write-Output ("size:   {0:N1} MB" -f ((Get-Item $zip).Length / 1MB))
+
+if ($Installer) {
+    $iscc = @(
+        (Get-Command iscc -ErrorAction SilentlyContinue).Source,
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+        "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+        "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+    if (-not $iscc) { throw 'Inno Setup 6 (ISCC.exe) not found - install it or omit -Installer' }
+    & $iscc /Q "/DAppVersion=$version" "/DSourceDir=$stage" "/DOutputDir=$dist" (Join-Path $root 'installer\telepad.iss')
+    if ($LASTEXITCODE -ne 0) { throw 'iscc failed' }
+    $setupName = "$name-setup.exe"
+    $setup = Join-Path $dist $setupName
+    $shash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLower()
+    [IO.File]::WriteAllText("$setup.sha256", "$shash  $setupName`n", [Text.UTF8Encoding]::new($false))
+    Write-Output "setup:  $setup"
+    Write-Output "sha256: $shash"
+}

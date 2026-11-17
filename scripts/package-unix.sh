@@ -68,6 +68,9 @@ else
   (xdg-desktop-portal, present on GNOME/KDE desktops).'
 fi
 
+# Portable marker: keeps telepad.db next to the program instead of the per-user folder.
+printf '%s\n' "Keep Telepad's data (telepad.db) next to the program. Delete this file to use the per-user data folder instead." >"$stage/portable"
+
 cat >"$stage/README.txt" <<EOF
 Telepad $version - portable ($os $arch)
 =============================================
