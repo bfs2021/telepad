@@ -2,6 +2,16 @@
 
 Newest first.
 
+## [2026-11-17] — feat(docker): container shell, actions and compose/run command view (Portainer-like)
+- Issue #26 created on GitHub
+- Scope: telepad-core (remote commands), telepad-app, telepad-gui (Docker section)
+- Labels: enhancement — needs the owner's decision on relaxing the read-only rule
+
+## [2026-11-17] — feat(collector): overview flags for reboot needed, pending updates and end-of-life OS
+- Issue #25 created on GitHub
+- Scope: telepad-core (script.sh, parse, model, EOL table), telepad-app, telepad-gui
+- Labels: enhancement
+
 ## [2026-11-17] — fix(ui): choosing an IdentityFile on macOS; key permission hint (#23)
 - Host editor: **Browse…** opens in the current key's folder or `~/.ssh` (hidden on
   macOS/Linux, so it was unreachable from the home folder), with a Cmd+Shift+. hint; an arrow
