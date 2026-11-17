@@ -149,7 +149,7 @@ in `update()` with a test → run the effect in `runtime.rs` → draw/emit it in
 | Fallback key for hosts without IdentityFile | `SSH_IDENTITY_FILE` in `.env` next to `config` |
 | ssh binary override | `TELEPAD_SSH` env var (default: Windows `System32\OpenSSH\ssh.exe`, else `ssh`) |
 | View settings | `settings` table `ui_compact_host_list` / `ui_group_by_status` (host list toggles) |
-| Update source | `settings` table `update_enabled` / `update_repo` (☰ Hosts ▸ Software update…); default `yohannaftali/telepad` |
+| Update source | `settings` table `update_enabled` / `update_repo` / `update_auto_install` (☰ Hosts ▸ Software update…); check via the github.com `releases/latest` redirect (API only as fallback: 60 req/h per IP); default `yohannaftali/telepad` |
 
 `.env`, `config`, `telepad.db` and `telepad.ssh_config` are git-ignored: never commit an inventory.
 
@@ -191,3 +191,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #26 | feat(docker): container shell, actions and compose/run command view | closed | 2026-11-17 |
 | #27 | feat(ui): light / dark / system theme switch | closed | 2026-11-17 |
 | #28 | feat(cluster): Docker Swarm and Kubernetes panel | closed | 2026-11-17 |
+| #34 | fix(update): update check fails behind a shared IP (GitHub API rate limit) | ready-for-review | 2026-11-17 |

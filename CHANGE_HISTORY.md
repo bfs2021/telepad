@@ -2,6 +2,25 @@
 
 Newest first.
 
+## [2026-11-17] — Telepad 0.6.1
+- Update check no longer uses the GitHub API, so offices sharing one IP see updates again;
+  failed checks retried after 30 minutes (#34).
+- New: **Install automatically** in Software update… (off by default) (#34).
+
+## [2026-11-17] — fix(update): check via github.com, retry after failures, automatic install (#34)
+- Cause: the check used `api.github.com` without a token (60 requests/hour per public IP,
+  shared by a whole office behind NAT); the automatic check failed silently and only
+  retried after 6 h, so no update button appeared.
+- `update.rs`: latest tag from the `github.com/<repo>/releases/latest` redirect
+  (`tag_from_location`, repo and semver checked), downloads from `releases/download/<tag>/`
+  (`web_check`, presence probed via the `.sha256`); API only as fallback.
+- Failed checks retried after 30 min (`RETRY_AFTER_FAILURE`); the error shows in
+  Software update….
+- `update_auto_install` (off by default): newer release with a download for this OS is
+  installed in the background after a successful check; restart stays the user's click.
+- Verified from the office network with the API limit at 0: check found 0.6.0 in under 2 s,
+  full download + SHA-256 + replace of a scratch `telepad.exe` succeeded.
+
 ## [2026-11-17] — Telepad 0.6.0
 - Maintenance flags: reboot needed, pending / security updates, OS end of support, in a
   sortable Flags column, cards, host list and the host page (#25).

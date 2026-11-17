@@ -100,6 +100,19 @@ pub fn update_window(ctx: &egui::Context, m: &Model, d: &mut Drafts, out: &mut V
                             ui.label("Check for updates");
                             ui.checkbox(&mut d.update_form.enabled, "at start and every 6 h");
                             ui.end_row();
+                            ui.label("Install automatically");
+                            ui.add_enabled(
+                                d.update_form.enabled,
+                                egui::Checkbox::new(
+                                    &mut d.update_form.auto_install,
+                                    "download, verify and install new releases",
+                                ),
+                            )
+                            .on_hover_text(
+                                "The SHA-256 is checked before anything is replaced. The new \
+                                 version runs after the next restart (Restart button in the top bar).",
+                            );
+                            ui.end_row();
                             ui.label("GitHub repository");
                             ui.add(
                                 egui::TextEdit::singleline(&mut d.update_form.repo)

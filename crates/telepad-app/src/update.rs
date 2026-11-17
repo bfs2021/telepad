@@ -8,7 +8,7 @@ use telepad_core::config::{Access, HostEntry};
 use telepad_core::docker_actions::{ComposeProject, Plan};
 use telepad_core::model::{Container, Manager};
 use telepad_core::store::{ImportMode, ImportSummary};
-use telepad_core::update::{CHECK_EVERY, CURRENT_VERSION, UpdateConfig};
+use telepad_core::update::{CHECK_EVERY, CURRENT_VERSION, RETRY_AFTER_FAILURE, UpdateConfig};
 
 use crate::msg::{Effect, Msg};
 use crate::state::{Editor, HostState, ImportDialog, Model, RunInfoView, State, UpdatePhase};
@@ -56,7 +56,12 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
         Msg::Fatal(e) => m.fatal = Some(format!("Cannot open the host database: {e}")),
         Msg::Tick { busy } => {
             m.busy = busy;
-            if m.update.enabled() && elapsed(m.update.last_check, now) >= Some(CHECK_EVERY) {
+            let every = if m.update.error.is_some() {
+                RETRY_AFTER_FAILURE
+            } else {
+                CHECK_EVERY
+            };
+            if m.update.enabled() && elapsed(m.update.last_check, now) >= Some(every) {
                 start_check(m, now, false, &mut fx);
             }
             let interval = Duration::from_secs(u64::from(d.interval_secs));
@@ -491,6 +496,17 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
                         say(m, now, format!("Telepad {CURRENT_VERSION} is up to date"));
                     }
                     m.update.check = Some(c);
+                    // Automatic install: only a newer release with a download for
+                    // this OS, and not after the user chose "Later".
+                    let auto = m.update.config.as_ref().is_some_and(|c| c.auto_install);
+                    if auto
+                        && !m.update.later
+                        && m.update.can_install()
+                        && let Some(c) = m.update.check.clone()
+                    {
+                        m.update.phase = UpdatePhase::Installing;
+                        fx.push(Effect::InstallUpdate(c));
+                    }
                 }
                 Err(e) => {
                     if m.update.manual {
@@ -503,7 +519,6 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
         Msg::UpdateInstalled(Ok(v)) => {
             say(m, now, format!("Updated to {v} — restart to use it"));
             m.update.phase = UpdatePhase::Installed(v);
-            m.update.window = true;
         }
         Msg::UpdateInstalled(Err(e)) => {
             m.update.phase = UpdatePhase::Idle;

@@ -187,8 +187,13 @@ fn update_check_repeats_every_six_hours_but_not_while_checking() {
     assert_eq!(s.model.update.error.as_deref(), Some("offline"));
     assert!(s.model.message.is_none(), "automatic check fails quietly");
     assert_eq!(
-        checks(&update(&mut s, Msg::Tick { busy: 0 }, t0 + CHECK_EVERY / 2)),
-        0
+        checks(&update(
+            &mut s,
+            Msg::Tick { busy: 0 },
+            t0 + telepad_core::update::RETRY_AFTER_FAILURE / 2
+        )),
+        0,
+        "a failed check is retried after 30 minutes, not sooner"
     );
     assert_eq!(
         checks(&update(&mut s, Msg::Tick { busy: 0 }, t0 + CHECK_EVERY)),
@@ -1034,4 +1039,83 @@ fn swarm_actions_cluster_flag_and_cluster_shown_once() {
     );
     assert!(fx.is_empty());
     assert!(s.model.message.as_ref().unwrap().0.contains("gone"));
+}
+
+#[test]
+fn failed_update_check_is_retried_after_half_an_hour() {
+    use telepad_core::update::RETRY_AFTER_FAILURE;
+    let t0 = Instant::now();
+    let (mut s, fx) = started(t0);
+    assert!(fx.iter().any(|e| matches!(e, Effect::CheckUpdate(_))));
+    update(
+        &mut s,
+        Msg::UpdateChecked(Err("GitHub rate limit reached".into())),
+        t0,
+    );
+    assert!(
+        s.model.message.is_none(),
+        "automatic failures stay quiet in the status bar"
+    );
+    let again = |s: &mut State, t| {
+        update(s, Msg::Tick { busy: 0 }, t)
+            .iter()
+            .any(|e| matches!(e, Effect::CheckUpdate(_)))
+    };
+    assert!(!again(&mut s, t0 + RETRY_AFTER_FAILURE / 2));
+    assert!(again(&mut s, t0 + RETRY_AFTER_FAILURE));
+}
+
+#[test]
+fn automatic_install_only_when_enabled_and_installable() {
+    use telepad_core::update::{Asset, Check};
+    let t0 = Instant::now();
+    let check = |asset: bool| Check {
+        version: "99.0.0".into(),
+        notes: None,
+        page_url: String::new(),
+        asset: asset.then(|| Asset {
+            name: "telepad-99.0.0.zip".into(),
+            url: "https://github.com/yohannaftali/telepad/releases/download/v99.0.0/x.zip".into(),
+            size: 0,
+            sha256_url:
+                "https://github.com/yohannaftali/telepad/releases/download/v99.0.0/x.zip.sha256"
+                    .into(),
+        }),
+        newer: true,
+    };
+    let installs = |fx: &[Effect]| fx.iter().any(|e| matches!(e, Effect::InstallUpdate(_)));
+
+    // Off (default): only the banner.
+    let (mut s, _) = started(t0);
+    assert!(!installs(&update(
+        &mut s,
+        Msg::UpdateChecked(Ok(check(true))),
+        t0
+    )));
+    assert!(s.model.update.banner().is_some());
+
+    // On: installs in the background, without opening the window.
+    let (mut s, _) = started(t0);
+    s.model.update.config.as_mut().unwrap().auto_install = true;
+    assert!(installs(&update(
+        &mut s,
+        Msg::UpdateChecked(Ok(check(true))),
+        t0
+    )));
+    assert_eq!(s.model.update.phase, UpdatePhase::Installing);
+    update(&mut s, Msg::UpdateInstalled(Ok("99.0.0".into())), t0);
+    assert_eq!(
+        s.model.update.phase,
+        UpdatePhase::Installed("99.0.0".into())
+    );
+    assert!(!s.model.update.window);
+
+    // On, but no download for this OS: nothing to install.
+    let (mut s, _) = started(t0);
+    s.model.update.config.as_mut().unwrap().auto_install = true;
+    assert!(!installs(&update(
+        &mut s,
+        Msg::UpdateChecked(Ok(check(false))),
+        t0
+    )));
 }

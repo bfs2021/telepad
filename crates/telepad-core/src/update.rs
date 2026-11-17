@@ -1,6 +1,9 @@
 //! Self-update from GitHub Releases (default `yohannaftali/telepad`).
 //!
-//! The latest release is read from the public GitHub API over HTTPS (no token).
+//! The latest release is read from github.com's `releases/latest` redirect and
+//! the files from the normal download links: neither counts against the API's
+//! 60 requests per hour per IP, which a whole office behind one NAT shares.
+//! The API (no token) is only a fallback, for when github.com cannot be read.
 //! A release carries `telepad-<version>-<os>-<arch>.zip` and its `.sha256`.
 //! Everything here blocks, so it runs on background threads.
 
@@ -15,6 +18,8 @@ pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const DEFAULT_REPO: &str = "yohannaftali/telepad";
 /// How often the GUI checks again while it is running.
 pub const CHECK_EVERY: Duration = Duration::from_secs(6 * 3600);
+/// After a failed check, try again this soon.
+pub const RETRY_AFTER_FAILURE: Duration = Duration::from_secs(30 * 60);
 const MAX_DOWNLOAD: u64 = 300 * 1024 * 1024;
 
 /// Stored in the `settings` table (`update_*` keys).
@@ -23,6 +28,9 @@ pub struct UpdateConfig {
     pub enabled: bool,
     /// GitHub `owner/name` that publishes the releases.
     pub repo: String,
+    /// Download, verify and install a newer release as soon as a check finds
+    /// it; the new version runs after the next restart. Off by default.
+    pub auto_install: bool,
 }
 
 impl Default for UpdateConfig {
@@ -30,6 +38,7 @@ impl Default for UpdateConfig {
         Self {
             enabled: true,
             repo: DEFAULT_REPO.into(),
+            auto_install: false,
         }
     }
 }
@@ -51,6 +60,11 @@ impl UpdateConfig {
 
     pub fn api_url(&self) -> String {
         format!("https://api.github.com/repos/{}/releases/latest", self.repo)
+    }
+
+    /// Redirects to `.../releases/tag/<tag>` of the latest release (no API).
+    pub fn latest_url(&self) -> String {
+        format!("https://github.com/{}/releases/latest", self.repo)
     }
 
     /// Release downloads must come from this repo on github.com.
@@ -145,6 +159,48 @@ pub fn parse_release(text: &str, cfg: &UpdateConfig) -> Result<Check, String> {
     })
 }
 
+/// The tag from the `releases/latest` redirect target
+/// (`https://github.com/<repo>/releases/tag/<tag>`, absolute or relative).
+pub fn tag_from_location(location: &str, cfg: &UpdateConfig) -> Result<String, String> {
+    let path = location
+        .trim()
+        .strip_prefix("https://github.com")
+        .unwrap_or(location.trim());
+    let tag = path
+        .strip_prefix(&format!("/{}/releases/tag/", cfg.repo))
+        .filter(|t| !t.is_empty() && !t.contains(['/', '?', '#']))
+        .ok_or_else(|| {
+            if path.ends_with("/releases") {
+                "no release published yet".to_string()
+            } else {
+                format!("unexpected GitHub redirect to {location}")
+            }
+        })?;
+    let version = tag.trim_start_matches('v');
+    semver::Version::parse(version)
+        .map_err(|e| format!("release tag '{tag}' is not a version: {e}"))?;
+    Ok(tag.to_string())
+}
+
+/// What the web check knows: version and download links (size unknown).
+pub fn web_check(cfg: &UpdateConfig, tag: &str, has_download: bool) -> Check {
+    let version = tag.trim_start_matches('v').to_string();
+    let name = asset_name(&version);
+    let url = format!("{}{tag}/{name}", cfg.download_prefix());
+    Check {
+        newer: is_newer(&version, CURRENT_VERSION),
+        page_url: format!("https://github.com/{}/releases/tag/{tag}", cfg.repo),
+        notes: None,
+        asset: has_download.then(|| Asset {
+            sha256_url: format!("{url}.sha256"),
+            url,
+            name,
+            size: 0,
+        }),
+        version,
+    }
+}
+
 /// First token of a `sha256sum`-style line, if it is a SHA-256.
 pub fn parse_sha256_file(text: &str) -> Result<String, String> {
     let h = text
@@ -197,8 +253,58 @@ impl Updater {
         Self { config }
     }
 
+    /// github.com first; the API only if that fails (it has notes, but a low limit).
     pub fn check(&self) -> Result<Check, String> {
         self.config.validate()?;
+        match self.check_web() {
+            Ok(c) => Ok(c),
+            Err(web) => self.check_api().map_err(|api| {
+                if api.contains("rate limit") {
+                    web
+                } else {
+                    format!("{web} (API: {api})")
+                }
+            }),
+        }
+    }
+
+    fn check_web(&self) -> Result<Check, String> {
+        let no_redirect: ureq::Agent = ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(30)))
+            .user_agent(format!("telepad/{CURRENT_VERSION}"))
+            .max_redirects(0)
+            .http_status_as_error(false)
+            .build()
+            .into();
+        let resp = no_redirect
+            .get(&self.config.latest_url())
+            .call()
+            .map_err(|e| format!("cannot reach github.com: {e}"))?;
+        let status = resp.status().as_u16();
+        if !(300..400).contains(&status) {
+            return Err(match status {
+                404 => "repository not found on github.com".into(),
+                s => format!("github.com answered HTTP {s} for the latest release"),
+            });
+        }
+        let location = resp
+            .headers()
+            .get("location")
+            .and_then(|v| v.to_str().ok())
+            .ok_or("github.com did not say which release is the latest")?;
+        let tag = tag_from_location(location, &self.config)?;
+        let probe = web_check(&self.config, &tag, true);
+        // The .sha256 is tiny: fetching it tells whether this OS has a download.
+        let has_download = probe.asset.as_ref().is_some_and(|a| {
+            agent(Duration::from_secs(30))
+                .get(&a.sha256_url)
+                .call()
+                .is_ok()
+        });
+        Ok(web_check(&self.config, &tag, has_download))
+    }
+
+    fn check_api(&self) -> Result<Check, String> {
         let mut resp = agent(Duration::from_secs(30))
             .get(&self.config.api_url())
             .header("Accept", "application/vnd.github+json")
@@ -229,6 +335,7 @@ pub fn install(check: &Check) -> Result<String, String> {
         )
     })?;
     if asset.size > MAX_DOWNLOAD {
+        // size is 0 (unknown) from the web check; the download itself is capped below.
         return Err(format!(
             "{} is too large ({} bytes)",
             asset.name, asset.size
@@ -530,5 +637,51 @@ mod tests {
         let dir = work_dir().unwrap();
         assert!(extract_executables(&missing, &dir).is_err());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn latest_release_from_the_web_redirect() {
+        let cfg = UpdateConfig::default();
+        assert_eq!(
+            tag_from_location(
+                "https://github.com/yohannaftali/telepad/releases/tag/v0.6.0",
+                &cfg
+            ),
+            Ok("v0.6.0".to_string())
+        );
+        assert_eq!(
+            tag_from_location("/yohannaftali/telepad/releases/tag/1.2.3", &cfg),
+            Ok("1.2.3".to_string())
+        );
+        assert!(
+            tag_from_location("https://github.com/yohannaftali/telepad/releases", &cfg)
+                .unwrap_err()
+                .contains("no release")
+        );
+        for bad in [
+            "https://evil.example/yohannaftali/telepad/releases/tag/v9.9.9",
+            "https://github.com/someone/else/releases/tag/v9.9.9",
+            "https://github.com/yohannaftali/telepad/releases/tag/nightly",
+            "https://github.com/yohannaftali/telepad/releases/tag/v1.0.0/../x",
+        ] {
+            assert!(tag_from_location(bad, &cfg).is_err(), "{bad}");
+        }
+        let c = web_check(&cfg, "v99.0.0", true);
+        assert!(c.newer);
+        let a = c.asset.unwrap();
+        assert_eq!(
+            a.url,
+            format!(
+                "https://github.com/yohannaftali/telepad/releases/download/v99.0.0/telepad-99.0.0-{}.zip",
+                platform_key()
+            )
+        );
+        assert_eq!(a.sha256_url, format!("{}.sha256", a.url));
+        assert_eq!(
+            c.page_url,
+            "https://github.com/yohannaftali/telepad/releases/tag/v99.0.0"
+        );
+        assert!(web_check(&cfg, "v99.0.0", false).asset.is_none());
+        assert!(!web_check(&cfg, "v0.0.1", true).newer);
     }
 }
