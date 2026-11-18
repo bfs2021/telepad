@@ -2,6 +2,18 @@
 
 Newest first.
 
+## [2026-11-18] — Tested and merged: #41, #42, #43
+- Windows 11 x86_64: fmt, clippy `-D warnings`, 103 tests, release build pass; macOS / Linux
+  via CI. Headless `telepad-check` unchanged (dockercenter collected, ccl clear error).
+- GUI on a throwaway database (made-up hosts, documentation IPs):
+  - #41: ☰ at the top right in dark and light theme, all menu items; bar wraps at 900 px.
+  - #42: "Paste from clipboard" (test text put on the clipboard with the owner's OK),
+    CRLF lines read, preview 2 added, import → User / Port in the generated ssh config.
+  - #43: drag in host list and table, order kept after restart and in the ssh config,
+    handles hidden with hints while searching.
+- Found while testing (pre-existing, filed separately): Merge import gives new hosts
+  `sort_order` 1, 2, … so they land between existing hosts instead of at the end.
+
 ## [2026-11-18] — feat(ui): reorder hosts by drag and drop (#43)
 - Issue #43 addressed on GitHub.
 - `store.rs`: `save_order` (one transaction; `sort_order` already in the schema).

@@ -195,6 +195,6 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #36 | perf(collector): tiered collection — live, 6-hourly, daily and ping-only checks | closed | 2026-11-18 |
 | #37 | feat(ui): Overview — Docker page grouping containers of all hosts by stack | closed | 2026-11-18 |
 | #38 | fix(ui): overview buttons look flat in light and dark themes | closed | 2026-11-18 |
-| #41 | fix(ui): Hosts menu as icon-only hamburger at the top right | ready-for-review | 2026-11-18 |
-| #42 | feat(import): import hosts from pasted plain text | ready-for-review | 2026-11-18 |
-| #43 | feat(ui): reorder hosts by drag and drop in host list and overview table | ready-for-review | 2026-11-18 |
+| #41 | fix(ui): Hosts menu as icon-only hamburger at the top right | closed | 2026-11-18 |
+| #42 | feat(import): import hosts from pasted plain text | closed | 2026-11-18 |
+| #43 | feat(ui): reorder hosts by drag and drop in host list and overview table | closed | 2026-11-18 |
