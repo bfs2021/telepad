@@ -12,8 +12,11 @@ Only the latest release is supported.
 
 ## Security model
 
-- Telepad only runs read-only commands on monitored hosts; `sudo` is only used as
-  `sudo -n` (never prompts) for the BMC readings.
+- Monitoring only runs read-only commands on hosts; `sudo` is only used as
+  `sudo -n` (never prompts) for the BMC readings. Changes happen only through actions
+  the user starts and confirms: Docker / BMC actions in a terminal, and **Public keys…**
+  (adds or removes one line in the login user's `~/.ssh/authorized_keys` after the user
+  types `add` / `revoke`; it refuses to revoke the key Telepad itself logs in with).
 - New host keys are accepted on first connect (`StrictHostKeyChecking=accept-new`);
   a **changed** host key is rejected, as with plain ssh.
 - Host fields are validated before they are saved, because the database is rendered

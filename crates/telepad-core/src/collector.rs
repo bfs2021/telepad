@@ -140,7 +140,7 @@ fn terminal_script_args(settings: &SshSettings, host: &HostEntry, script: &str) 
     a
 }
 
-fn base64(data: &[u8]) -> String {
+pub(crate) fn base64(data: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
     for chunk in data.chunks(3) {
@@ -287,7 +287,7 @@ pub fn fetch_run_info(
 }
 
 /// Run a script with `sh -s` over BatchMode ssh; (stdout, stderr, exit code).
-fn run_script(
+pub(crate) fn run_script(
     settings: &SshSettings,
     host: &HostEntry,
     script: &str,

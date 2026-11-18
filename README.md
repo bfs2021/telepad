@@ -15,8 +15,11 @@ hosts with the **system OpenSSH client** and the keys you already use, runs a
 - Docker containers and compose stacks: image, state, container IP per network, published ports
 - **Open SSH** (a terminal logged in to the host), **Copy ssh command**, and **Open RDP**
   for Windows hosts without SSH
+- **Public keys…**: add or revoke one SSH public key on many hosts at once
 
-No agent is installed on the hosts and nothing on them is changed. There is no server
+No agent is installed on the hosts, and monitoring never changes anything on them. The
+only changes are actions you start and confirm yourself (Docker actions, BMC setup,
+Public keys). There is no server
 and no web UI: it is one portable desktop app plus a headless `telepad-check`.
 
 Releases are built for Windows (x86_64), macOS (Apple silicon and Intel) and Linux

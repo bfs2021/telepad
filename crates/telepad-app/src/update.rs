@@ -3,6 +3,7 @@
 
 use std::time::{Duration, Instant};
 
+use telepad_core::authorized_keys::{KeyOutcome, PublicKey};
 use telepad_core::collector::{self, Job, Scope};
 use telepad_core::config::{Access, HostEntry};
 use telepad_core::docker_actions::{ComposeProject, Plan};
@@ -12,7 +13,8 @@ use telepad_core::update::{CHECK_EVERY, CURRENT_VERSION, RETRY_AFTER_FAILURE, Up
 
 use crate::msg::{Effect, Msg};
 use crate::state::{
-    Editor, HostState, ImportDialog, Model, PasteImport, RunInfoView, State, UpdatePhase,
+    Editor, HostState, ImportDialog, KeyRun, KeysDraft, Model, PasteImport, RunInfoView, State,
+    UpdatePhase, key_selectable,
 };
 
 /// Apply `msg` to `state` at time `now`; return the effects to run.
@@ -379,6 +381,111 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
         }
         Msg::ImportOpened(Err((path, e))) => {
             say(m, now, format!("Cannot import {}: {e}", path.display()));
+        }
+        Msg::KeysOpen => {
+            if d.keys.is_none() {
+                d.keys = Some(KeysDraft::default());
+            }
+            if m.key_run.as_ref().is_some_and(|r| !r.running()) {
+                m.key_run = None;
+            }
+        }
+        Msg::KeysClose => {
+            d.keys = None;
+            if m.key_run.as_ref().is_some_and(|r| !r.running()) {
+                m.key_run = None;
+            }
+        }
+        Msg::KeysSelectAll(on) => {
+            if let Some(k) = &mut d.keys {
+                for i in k.listed(m) {
+                    let e = &m.hosts[i].entry;
+                    if let (Some(id), true) = (e.id, key_selectable(e)) {
+                        if on {
+                            k.selected.insert(id);
+                        } else {
+                            k.selected.remove(&id);
+                        }
+                    }
+                }
+            }
+        }
+        Msg::KeysToggle(id) => {
+            if let Some(k) = &mut d.keys
+                && m.hosts
+                    .iter()
+                    .any(|h| h.entry.id == Some(id) && key_selectable(&h.entry))
+                && !k.selected.remove(&id)
+            {
+                k.selected.insert(id);
+            }
+        }
+        Msg::KeysAsk(action) => {
+            if let Some(k) = &mut d.keys
+                && PublicKey::parse(&k.text).is_ok()
+                && !k.chosen(m).is_empty()
+                && !m.key_run.as_ref().is_some_and(KeyRun::running)
+            {
+                k.confirm = Some(action);
+                k.typed.clear();
+            }
+        }
+        Msg::KeysConfirmCancel => {
+            if let Some(k) = &mut d.keys {
+                k.confirm = None;
+                k.typed.clear();
+            }
+        }
+        Msg::KeysRun => {
+            let Some(k) = &mut d.keys else { return fx };
+            let Some(action) = k.confirm else { return fx };
+            if k.typed.trim() != action.word() || m.key_run.as_ref().is_some_and(KeyRun::running) {
+                return fx;
+            }
+            let Ok(key) = PublicKey::parse(&k.text) else {
+                return fx;
+            };
+            let hosts: Vec<HostEntry> = k.chosen(m).into_iter().cloned().collect();
+            k.confirm = None;
+            k.typed.clear();
+            if hosts.is_empty() {
+                return fx;
+            }
+            m.key_run = Some(KeyRun {
+                action,
+                fingerprint: key.fingerprint(),
+                comment: key.comment.clone(),
+                results: hosts.iter().map(|h| (h.alias.clone(), None)).collect(),
+            });
+            fx.push(Effect::ApplyKey { action, key, hosts });
+        }
+        Msg::KeyResult { alias, outcome } => {
+            if let Some(run) = &mut m.key_run
+                && let Some(slot) = run
+                    .results
+                    .iter_mut()
+                    .find(|(a, r)| *a == alias && r.is_none())
+            {
+                slot.1 = Some(outcome);
+                if !run.running() {
+                    let ok = run
+                        .results
+                        .iter()
+                        .filter(|(_, r)| r.as_ref().is_some_and(KeyOutcome::ok))
+                        .count();
+                    let total = run.results.len();
+                    let text = format!(
+                        "{}: {ok} of {total} host(s) done{}",
+                        run.action.title(),
+                        if ok < total {
+                            format!(", {} failed or refused", total - ok)
+                        } else {
+                            String::new()
+                        }
+                    );
+                    say(m, now, text);
+                }
+            }
         }
         Msg::PasteImport => d.paste = Some(PasteImport::default()),
         Msg::PasteCancel => d.paste = None,

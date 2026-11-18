@@ -55,6 +55,10 @@ fn hosts_menu(ui: &mut egui::Ui, out: &mut Vec<Msg>) {
                 ],
             ),
             ("Export", vec![(icons::EXPORT, "Export…", Msg::Export)]),
+            (
+                "Access",
+                vec![(icons::KEY, "Public keys… (add / revoke)", Msg::KeysOpen)],
+            ),
         ] {
             ui.label(RichText::new(group).weak().small());
             for (icon, text, msg) in items {
@@ -72,7 +76,7 @@ fn hosts_menu(ui: &mut egui::Ui, out: &mut Vec<Msg>) {
         }
     })
     .response
-    .on_hover_text("Hosts: add, import, export · Software update");
+    .on_hover_text("Hosts: add, import, export · Public keys · Software update");
 }
 
 fn top_bar_items(ui: &mut egui::Ui, m: &Model, d: &mut Drafts, out: &mut Vec<Msg>) {

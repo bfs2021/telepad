@@ -10,6 +10,7 @@ mod docker;
 mod docker_overview;
 mod editor;
 mod import;
+mod keys;
 mod overview;
 mod panels;
 mod ports;
@@ -77,6 +78,7 @@ pub fn draw(root: &mut egui::Ui, m: &Model, d: &mut Drafts, now: Instant) -> Vec
     editor::editor_window(&ctx, d, &mut out);
     import::import_window(&ctx, m, &mut out);
     import::paste_window(&ctx, d, &mut out);
+    keys::keys_window(&ctx, m, d, &mut out);
     run_info::run_info_window(&ctx, d, &mut out);
     confirm::delete_confirm(&ctx, m, &mut out);
     update_window::update_window(&ctx, m, d, &mut out);

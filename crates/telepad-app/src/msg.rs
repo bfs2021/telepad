@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 
+use telepad_core::authorized_keys::{KeyAction, KeyOutcome, PublicKey};
 use telepad_core::collector;
 use telepad_core::config::{HostEntry, Inventory};
 use telepad_core::docker_actions::{
@@ -124,6 +125,18 @@ pub enum Msg {
     ImportApply,
     ImportCancel,
     Export,
+    /// "Public keys…" window (add / revoke one key on chosen hosts).
+    KeysOpen,
+    KeysClose,
+    /// Header checkbox: select (true) or clear every listed SSH host.
+    KeysSelectAll(bool),
+    /// Host id.
+    KeysToggle(i64),
+    /// Add / Revoke clicked: ask for the typed confirmation.
+    KeysAsk(KeyAction),
+    KeysConfirmCancel,
+    /// Confirmation typed: run it.
+    KeysRun,
 
     // ---- self-update (views)
     UpdateWindow(bool),
@@ -165,6 +178,11 @@ pub enum Msg {
     OrderSaved(Result<(), String>),
     RunInfoLoaded(RunInfo),
     ClipboardRead(Result<String, String>),
+    /// One host of a key run finished.
+    KeyResult {
+        alias: String,
+        outcome: KeyOutcome,
+    },
     /// Text for the status bar (e.g. from opening a terminal).
     Notice(String),
 }
@@ -232,4 +250,11 @@ pub enum Effect {
     OpenUrl(String),
     /// Start the new exe and close this window.
     Relaunch,
+    /// Add / revoke `key` in `~/.ssh/authorized_keys` on each host, in the
+    /// background → one [`Msg::KeyResult`] per host.
+    ApplyKey {
+        action: KeyAction,
+        key: PublicKey,
+        hosts: Vec<HostEntry>,
+    },
 }

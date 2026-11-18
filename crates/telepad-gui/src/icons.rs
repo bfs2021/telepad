@@ -18,6 +18,10 @@ pub const EXPORT: &str = "\u{e4c0}";
 pub const MENU: &str = "\u{e2f0}";
 /// dots-six-vertical: drag handle.
 pub const GRIP: &str = "\u{eae2}";
+/// key: public keys window.
+pub const KEY: &str = "\u{e2d6}";
+pub const CHECK_CIRCLE: &str = "\u{e184}";
+pub const X_CIRCLE: &str = "\u{e4f8}";
 pub const SEARCH: &str = "\u{e30c}";
 pub const CONTAINER: &str = "\u{e1da}";
 pub const STACK: &str = "\u{e466}";
@@ -360,6 +364,9 @@ mod tests {
             EXPORT,
             MENU,
             GRIP,
+            KEY,
+            CHECK_CIRCLE,
+            X_CIRCLE,
             SEARCH,
             CONTAINER,
             STACK,
