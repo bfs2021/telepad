@@ -12,11 +12,19 @@ use crate::widgets::usage_color;
 pub fn keys_window(ctx: &egui::Context, m: &Model, d: &mut Drafts, out: &mut Vec<Msg>) {
     let Some(k) = &mut d.keys else { return };
     let mut open = true;
+    // Key, hosts, confirmation and results can be taller than the app window:
+    // keep the window on screen and scroll its content.
+    let max_height = (ctx.content_rect().height() - 120.0).max(200.0);
     egui::Window::new("Public keys")
         .collapsible(false)
         .default_width(640.0)
         .open(&mut open)
-        .show(ctx, |ui| body(ui, m, k, out));
+        .show(ctx, |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("keys-window")
+                .max_height(max_height)
+                .show(ui, |ui| body(ui, m, k, out));
+        });
     if !open {
         out.push(Msg::KeysClose);
     }
@@ -216,26 +224,21 @@ fn results(ui: &mut egui::Ui, m: &Model, ok: egui::Color32, bad: egui::Color32) 
             ui.spinner();
         }
     });
-    egui::ScrollArea::vertical()
-        .id_salt("key-results")
-        .max_height(200.0)
+    // No own scroll area: the window's scroll area holds the whole list.
+    egui::Grid::new("key-results-grid")
+        .num_columns(2)
+        .spacing([12.0, 4.0])
         .show(ui, |ui| {
-            egui::Grid::new("key-results-grid")
-                .num_columns(2)
-                .spacing([12.0, 4.0])
-                .show(ui, |ui| {
-                    for (alias, r) in &run.results {
-                        ui.label(alias);
-                        match r {
-                            None => ui.label(RichText::new("running…").weak()),
-                            Some(r) if r.ok() => ui
-                                .colored_label(ok, format!("{} {}", icons::CHECK_CIRCLE, r.text())),
-                            Some(r) => {
-                                ui.colored_label(bad, format!("{} {}", icons::X_CIRCLE, r.text()))
-                            }
-                        };
-                        ui.end_row();
+            for (alias, r) in &run.results {
+                ui.label(alias);
+                match r {
+                    None => ui.label(RichText::new("running…").weak()),
+                    Some(r) if r.ok() => {
+                        ui.colored_label(ok, format!("{} {}", icons::CHECK_CIRCLE, r.text()))
                     }
-                });
+                    Some(r) => ui.colored_label(bad, format!("{} {}", icons::X_CIRCLE, r.text())),
+                };
+                ui.end_row();
+            }
         });
 }
