@@ -2,6 +2,11 @@
 
 Newest first.
 
+## [2026-11-18] — Telepad 0.7.1
+- New: **☰ → Public keys… (add / revoke)**: add or revoke one SSH public key on many hosts
+  at once, after a typed confirmation, with a result per host; refuses to revoke the key
+  Telepad logs in with (#49).
+
 ## [2026-11-18] — Tested and merged: #49
 - Windows 11 x86_64: fmt, clippy, 112 tests, release build; CI on Windows, macOS, Linux.
 - GUI on a throwaway database: invalid key error, fingerprint (= `ssh-keygen -lf`), select
