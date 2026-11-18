@@ -438,6 +438,12 @@ impl Store {
         if mode == ImportMode::Replace {
             tx.execute("DELETE FROM hosts", [])?;
         }
+        // New hosts go after the existing ones, in imported order; an updated
+        // host keeps its place (the conflict update leaves sort_order alone).
+        let last: i64 =
+            tx.query_row("SELECT COALESCE(MAX(sort_order), 0) FROM hosts", [], |r| {
+                r.get(0)
+            })?;
         for (i, h) in inv.hosts.iter().enumerate() {
             tx.execute(
                 "INSERT INTO hosts(alias, hostname, user, port, identity_file, description, options,
@@ -457,7 +463,7 @@ impl Store {
                     h.note,
                     encode_options(&h.options),
                     !h.unmonitored,
-                    i as i64 + 1,
+                    last + i as i64 + 1,
                     h.access.as_str()
                 ],
             )?;
@@ -940,6 +946,36 @@ mod tests {
         };
         s.set_ui_prefs(&p).unwrap();
         assert_eq!(s.ui_prefs().unwrap(), p);
+    }
+
+    #[test]
+    fn merge_import_appends_new_hosts_and_keeps_the_saved_order() {
+        let mut s = mem();
+        let ids: Vec<i64> = ["alpha", "bravo", "charlie", "delta"]
+            .iter()
+            .map(|a| s.save_host(&HostEntry::new(a)).unwrap())
+            .collect();
+        s.save_order(&[ids[3], ids[1], ids[2], ids[0]]).unwrap();
+        let names = |s: &Store| -> Vec<String> {
+            s.hosts().unwrap().into_iter().map(|h| h.alias).collect()
+        };
+
+        let mut bravo = HostEntry::new("bravo");
+        bravo.hostname = "192.0.2.21".into();
+        let inv = Inventory {
+            hosts: vec![HostEntry::new("echo01"), bravo, HostEntry::new("foxtrot")],
+            global: String::new(),
+        };
+        s.import(&inv, ImportMode::Merge).unwrap();
+        assert_eq!(
+            names(&s),
+            ["delta", "bravo", "charlie", "alpha", "echo01", "foxtrot"]
+        );
+        assert_eq!(s.hosts().unwrap()[1].hostname, "192.0.2.21");
+
+        // Replace takes the file order.
+        s.import(&inv, ImportMode::Replace).unwrap();
+        assert_eq!(names(&s), ["echo01", "bravo", "foxtrot"]);
     }
 
     #[test]
