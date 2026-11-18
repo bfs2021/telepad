@@ -2,6 +2,11 @@
 
 Newest first.
 
+## [2026-11-18] — chore: project skills, #34 status
+- `.claude/skills/` (planner, coder, tester, reviewer, shared API notes) copied from the
+  senopati project and adapted to Telepad (`telepad-check`, GitHub, `telepad.db`).
+- #34 status changed: ready-for-review → closed.
+
 ## [2026-11-18] — Tested and merged: #36, #37, #38 (PR #39)
 - Windows 11 x86_64: fmt, clippy `-D warnings`, 98 tests, release build pass; macOS / Linux
   left to CI (no local targets).
