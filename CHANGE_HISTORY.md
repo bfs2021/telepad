@@ -2,6 +2,16 @@
 
 Newest first.
 
+## [2026-11-18] — perf(collector): tiered collection, Docker overview, overview buttons (#36, #37, #38)
+- Issues #36 (enhancement), #37 (enhancement), #38 (bug, accessibility) created on GitHub.
+- #36: `script.sh` tiers `TP_STATIC` (daily: hostname, OS, kernel, CPU model) and `TP_SLOW`
+  (6 h: addresses, listening ports, updates / reboot); live metrics every round.
+  `collector::Scope` + `carry_over` keep skipped facts; Refresh, new/edited hosts and a
+  reboot read everything. Hosts down without ping reply are only pinged until they answer
+  (ssh still every 10 min).
+- #37: "Overview — Docker": containers of all hosts grouped by stack (`docker_stacks`).
+- #38: overview buttons filled with the accent colour when shown, outlined otherwise.
+
 ## [2026-11-17] — Telepad 0.6.1
 - Update check no longer uses the GitHub API, so offices sharing one IP see updates again;
   failed checks retried after 30 minutes (#34).

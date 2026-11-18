@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use eframe::egui::{self, RichText};
 use telepad_app::{
-    Drafts, HostState, Model, Msg, UpdatePhase, fullest_disk, host_flags, host_list_groups,
-    worst_usage,
+    Drafts, HostState, Model, Msg, OverviewPage, UpdatePhase, fullest_disk, host_flags,
+    host_list_groups, worst_usage,
 };
 use telepad_core::update::CURRENT_VERSION;
 
@@ -158,21 +158,30 @@ pub fn status_bar(ui: &mut egui::Ui, m: &Model, now: Instant) {
 
 pub fn host_list(ui: &mut egui::Ui, m: &Model, d: &Drafts, out: &mut Vec<Msg>) {
     ui.add_space(4.0);
-    let overview = egui::Button::selectable(
-        m.selected.is_none(),
-        RichText::new(il(icons::OVERVIEW, "Overview — all hosts"))
-            .strong()
-            .size(17.0),
-    )
-    .min_size(egui::vec2(ui.available_width(), 38.0));
-    if ui
-        .add(overview)
-        .on_hover_text("All hosts as a table or cards")
-        .clicked()
-    {
-        out.push(Msg::Select(None));
+    for (page, icon, text, tip) in [
+        (
+            OverviewPage::Hosts,
+            icons::OVERVIEW,
+            "Overview — all hosts",
+            "All hosts as a table or cards",
+        ),
+        (
+            OverviewPage::Docker,
+            icons::CONTAINER,
+            "Overview — Docker",
+            "Containers of all hosts, grouped by stack",
+        ),
+    ] {
+        let shown = m.selected.is_none() && m.overview == page;
+        if nav_button(ui, shown, icon, text)
+            .on_hover_text(tip)
+            .clicked()
+        {
+            out.push(Msg::ShowOverview(page));
+        }
+        ui.add_space(3.0);
     }
-    ui.add_space(4.0);
+    ui.add_space(2.0);
     ui.horizontal_wrapped(|ui| {
         ui.label(RichText::new("View").weak());
         if ui

@@ -14,6 +14,93 @@ use crate::model::HostReport;
 use crate::{parse, platform};
 
 const SCRIPT: &str = include_str!("script.sh");
+
+/// Static facts (hostname, OS release, kernel, CPU model) are re-read this often.
+pub const STATIC_EVERY: Duration = Duration::from_secs(24 * 3600);
+/// IP addresses, listening ports, pending updates and reboot flag.
+pub const SLOW_EVERY: Duration = Duration::from_secs(6 * 3600);
+/// A host without ping reply is only pinged; ssh is still tried this often
+/// (for hosts whose firewall drops ICMP).
+pub const DOWN_SSH_RETRY: Duration = Duration::from_secs(10 * 60);
+
+/// Which parts of the remote script one collection runs. Live metrics (uptime,
+/// load, CPU, memory, disks, sensors, Docker, Swarm, Kubernetes) always run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Scope {
+    /// Hostname, OS release, kernel, architecture, CPU model ([`STATIC_EVERY`]).
+    pub static_info: bool,
+    /// IP addresses, listening ports, updates / reboot ([`SLOW_EVERY`]).
+    pub slow: bool,
+    /// The host was down without a ping reply: ping first and skip ssh while it
+    /// stays silent. When it answers, everything is collected.
+    pub ping_first: bool,
+}
+
+impl Scope {
+    pub const FULL: Self = Self {
+        static_info: true,
+        slow: true,
+        ping_first: false,
+    };
+    pub const LIVE: Self = Self {
+        static_info: false,
+        slow: false,
+        ping_first: false,
+    };
+
+    /// The remote script with this scope's tier switches in front.
+    pub fn script(self) -> String {
+        let on = |b: bool| if b { "1" } else { "" };
+        format!(
+            "TP_STATIC={}\nTP_SLOW={}\n{SCRIPT}",
+            on(self.static_info),
+            on(self.slow)
+        )
+    }
+
+    /// Fill what this collection skipped from the previous report of the same host.
+    pub fn carry_over(self, new: &mut HostReport, prev: &HostReport) {
+        if !self.static_info {
+            new.hostname.clone_from(&prev.hostname);
+            new.os_name.clone_from(&prev.os_name);
+            new.os_pretty.clone_from(&prev.os_pretty);
+            new.os_id.clone_from(&prev.os_id);
+            new.os_version_id.clone_from(&prev.os_version_id);
+            new.kernel.clone_from(&prev.kernel);
+            new.os_type.clone_from(&prev.os_type);
+            new.arch.clone_from(&prev.arch);
+            new.cpu_model.clone_from(&prev.cpu_model);
+            new.cpu_cores = prev.cpu_cores;
+        }
+        if self.slow {
+            // Parsed without the OS release: look the end of support up again.
+            new.maintenance.end_of_support =
+                crate::eol::end_of_support(&new.os_id, &new.os_version_id, &new.os_pretty)
+                    .map(str::to_string);
+        } else {
+            new.addresses.clone_from(&prev.addresses);
+            new.listeners.clone_from(&prev.listeners);
+            new.maintenance.clone_from(&prev.maintenance);
+        }
+    }
+}
+
+/// One host to collect and how much of it.
+#[derive(Debug, Clone)]
+pub struct Job {
+    pub host: HostEntry,
+    pub scope: Scope,
+}
+
+/// Result of [`collect`].
+#[derive(Debug, Clone)]
+pub struct Outcome {
+    pub result: Result<HostReport, String>,
+    /// What actually ran: `ping_first` stays set only when ssh was skipped.
+    pub scope: Scope,
+    /// The host did not answer ping (and ssh failed or was skipped).
+    pub no_ping: bool,
+}
 const BMC_SETUP: &str = include_str!("bmc_setup.sh");
 
 /// Interactive ssh (with a tty) that shows `bmc_setup.sh`, waits for Enter and
@@ -120,27 +207,58 @@ impl SshSettings {
     }
 }
 
-/// Collect one host synchronously. Blocks for up to `total_timeout`.
+/// Collect everything from one host synchronously. Blocks for up to `total_timeout`.
 pub fn collect_one(settings: &SshSettings, host: &HostEntry) -> Result<HostReport, String> {
+    collect(settings, host, Scope::FULL).result
+}
+
+/// Collect `scope` from one host synchronously. Blocks for up to `total_timeout`.
+pub fn collect(settings: &SshSettings, host: &HostEntry, scope: Scope) -> Outcome {
     if host.access == Access::Rdp {
-        return probe_rdp(host, settings.connect_timeout);
-    }
-    let (out, err, code) = run_script(settings, host, SCRIPT)?;
-    if !out.contains("===HOSTNAME===") {
-        let msg = explain_ssh_error(&err, code);
-        // Tell "machine is down" apart from "only SSH fails".
-        let target = if host.hostname.is_empty() {
-            &host.alias
-        } else {
-            &host.hostname
+        return Outcome {
+            result: probe_rdp(host, settings.connect_timeout),
+            scope: Scope::FULL,
+            no_ping: false,
         };
-        let ping = match platform::ping(target, Duration::from_secs(2)) {
-            Some(ms) => format!(" (host answers ping, {ms:.0} ms)"),
-            None => " (no ping reply)".to_string(),
-        };
-        return Err(format!("{msg}{ping}"));
     }
-    Ok(parse::parse_report(&out))
+    let target = if host.hostname.is_empty() {
+        &host.alias
+    } else {
+        &host.hostname
+    };
+    let mut scope = scope;
+    if scope.ping_first {
+        if platform::ping(target, Duration::from_secs(2)).is_none() {
+            return Outcome {
+                result: Err("no ping reply — SSH is tried again when the host answers ping".into()),
+                scope,
+                no_ping: true,
+            };
+        }
+        // Back after being down: anything may have changed.
+        scope = Scope::FULL;
+    }
+    let ran = match run_script(settings, host, &scope.script()) {
+        Ok((out, _, _)) if out.contains("===TELEPAD===") => {
+            return Outcome {
+                result: Ok(parse::parse_report(&out)),
+                scope,
+                no_ping: false,
+            };
+        }
+        Ok((_, err, code)) => explain_ssh_error(&err, code),
+        Err(e) => e,
+    };
+    // Tell "machine is down" apart from "only SSH fails".
+    let (ping, no_ping) = match platform::ping(target, Duration::from_secs(2)) {
+        Some(ms) => (format!(" (host answers ping, {ms:.0} ms)"), false),
+        None => (" (no ping reply)".to_string(), true),
+    };
+    Outcome {
+        result: Err(format!("{ran}{ping}")),
+        scope,
+        no_ping,
+    }
 }
 
 /// "How it runs" for one container: read-only `docker inspect` + compose files.
@@ -338,12 +456,15 @@ pub enum Update {
     Done {
         alias: String,
         result: Result<Box<HostReport>, String>,
+        /// What ran (see [`Outcome::scope`]).
+        scope: Scope,
+        no_ping: bool,
         elapsed: Duration,
     },
 }
 
 struct Queue {
-    jobs: Mutex<VecDeque<HostEntry>>,
+    jobs: Mutex<VecDeque<Job>>,
     ready: Condvar,
     in_flight: Mutex<HashSet<String>>,
 }
@@ -373,16 +494,16 @@ impl Collector {
         (Self { queue }, rx)
     }
 
-    pub fn enqueue(&self, hosts: impl IntoIterator<Item = HostEntry>) {
+    pub fn enqueue(&self, new_jobs: impl IntoIterator<Item = Job>) {
         let Ok(mut inflight) = self.queue.in_flight.lock() else {
             return;
         };
         let Ok(mut jobs) = self.queue.jobs.lock() else {
             return;
         };
-        for h in hosts {
-            if inflight.insert(h.alias.clone()) {
-                jobs.push_back(h);
+        for j in new_jobs {
+            if inflight.insert(j.host.alias.clone()) {
+                jobs.push_back(j);
             }
         }
         self.queue.ready.notify_all();
@@ -400,7 +521,7 @@ fn worker(
     notify: Arc<dyn Fn() + Send + Sync>,
 ) {
     loop {
-        let host = {
+        let job = {
             let Ok(mut jobs) = q.jobs.lock() else { return };
             loop {
                 if let Some(h) = jobs.pop_front() {
@@ -412,20 +533,22 @@ fn worker(
                 };
             }
         };
-        let alias = host.alias.clone();
+        let alias = job.host.alias.clone();
         if tx.send(Update::Started(alias.clone())).is_err() {
             return;
         }
         notify();
         let t = Instant::now();
-        let result = collect_one(&s, &host);
+        let o = collect(&s, &job.host, job.scope);
         if let Ok(mut f) = q.in_flight.lock() {
             f.remove(&alias);
         }
         if tx
             .send(Update::Done {
                 alias,
-                result: result.map(Box::new),
+                result: o.result.map(Box::new),
+                scope: o.scope,
+                no_ping: o.no_ping,
                 elapsed: t.elapsed(),
             })
             .is_err()
@@ -439,6 +562,85 @@ fn worker(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scope_switches_tiers_in_front_of_the_script() {
+        let live = Scope::LIVE.script();
+        assert!(live.starts_with("TP_STATIC=\nTP_SLOW=\n"), "{live}");
+        assert!(Scope::FULL.script().starts_with("TP_STATIC=1\nTP_SLOW=1\n"));
+        assert!(live.contains("===TELEPAD==="));
+        // Parse-only check with the local sh when there is one (CI on Linux/macOS).
+        // The script goes through stdin, as over ssh (Windows mangles quotes in arguments).
+        let child = Command::new("sh")
+            .arg("-n")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn();
+        if let Ok(mut child) = child {
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin.write_all(live.replace('\r', "").as_bytes()).unwrap();
+            }
+            let out = child.wait_with_output().unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        // Tiers wrap whole sections: static before the live metrics, slow after.
+        let at = |m: &str| SCRIPT.find(m).unwrap();
+        assert!(at("if [ -n \"$TP_STATIC\" ]") < at("===HOSTNAME==="));
+        assert!(at("===CPUINFO===") < at("===UPTIME==="));
+        assert!(at("if [ -n \"$TP_SLOW\" ]") < at("===IPADDR==="));
+        assert!(
+            at("===IPADDR===") < at("===LISTEN===") && at("===UPDATES===") < at("===DOCKER===")
+        );
+    }
+
+    #[test]
+    fn live_collection_keeps_static_and_slow_facts_from_the_previous_report() {
+        let prev = HostReport {
+            hostname: "web01".into(),
+            os_pretty: "Ubuntu 22.04.4 LTS".into(),
+            os_id: "ubuntu".into(),
+            os_version_id: "22.04".into(),
+            kernel: "5.15.0".into(),
+            cpu_cores: Some(4),
+            addresses: vec![crate::model::NetAddr {
+                interface: "eth0".into(),
+                family: "inet".into(),
+                address: "192.0.2.10/24".into(),
+            }],
+            maintenance: crate::model::Maintenance {
+                updates: Some(3),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut new = HostReport {
+            uptime_secs: Some(100),
+            ..Default::default()
+        };
+        Scope::LIVE.carry_over(&mut new, &prev);
+        assert_eq!(new.hostname, "web01");
+        assert_eq!(new.cpu_cores, Some(4));
+        assert_eq!(new.addresses.len(), 1);
+        assert_eq!(new.maintenance.updates, Some(3));
+        assert_eq!(new.uptime_secs, Some(100));
+
+        // Slow tier ran: its own results win, end of support comes from the kept OS.
+        let mut new = HostReport::default();
+        let slow = Scope {
+            slow: true,
+            ..Scope::LIVE
+        };
+        slow.carry_over(&mut new, &prev);
+        assert!(new.addresses.is_empty());
+        assert_eq!(new.maintenance.updates, None);
+        assert_eq!(new.os_id, "ubuntu");
+        assert!(new.maintenance.end_of_support.is_some());
+    }
 
     #[test]
     fn base64_matches_rfc4648() {

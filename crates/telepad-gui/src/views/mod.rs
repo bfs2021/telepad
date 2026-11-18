@@ -7,6 +7,7 @@ mod cluster;
 mod confirm;
 mod detail;
 mod docker;
+mod docker_overview;
 mod editor;
 mod import;
 mod overview;
@@ -19,7 +20,7 @@ mod update_window;
 use std::time::Instant;
 
 use eframe::egui;
-use telepad_app::{Drafts, Model, Msg};
+use telepad_app::{Drafts, Model, Msg, OverviewPage};
 
 use crate::icons::{self, label as il};
 use crate::widgets::usage_color;
@@ -45,6 +46,9 @@ pub fn draw(root: &mut egui::Ui, m: &Model, d: &mut Drafts, now: Instant) -> Vec
         .show(root, |ui| panels::host_list(ui, m, d, &mut out));
 
     egui::CentralPanel::default().show(root, |ui| match m.selected {
+        None if m.overview == OverviewPage::Docker => {
+            docker_overview::docker_overview(ui, m, &d.filter, &mut out);
+        }
         None => {
             overview_toolbar(ui, d, &mut out);
             if d.overview_cards {

@@ -36,7 +36,7 @@ fn action_label(text: &str, destructive: bool) -> RichText {
 }
 
 /// Actions for one container (menu).
-fn container_menu(ui: &mut egui::Ui, c: &Container, host: usize, out: &mut Vec<Msg>) {
+pub fn container_menu(ui: &mut egui::Ui, c: &Container, host: usize, out: &mut Vec<Msg>) {
     ui.menu_button(icons::MENU, |ui| {
         ui.label(RichText::new(&c.name).strong());
         ui.label(RichText::new(TERMINAL_HINT).weak().small());
@@ -85,7 +85,7 @@ fn container_menu(ui: &mut egui::Ui, c: &Container, host: usize, out: &mut Vec<M
 }
 
 /// Compose actions for a stack, or the way to Portainer.
-fn stack_controls(
+pub fn stack_controls(
     ui: &mut egui::Ui,
     r: &HostReport,
     stack: &str,

@@ -81,6 +81,8 @@ pub enum Msg {
         action: WorkloadAction,
     },
     Select(Option<usize>),
+    /// Host list buttons: "Overview — all hosts" / "Overview — Docker".
+    ShowOverview(crate::state::OverviewPage),
     SelectAlias(String),
     /// Host list: compact (true) or detailed rows.
     SetCompactHostList(bool),
@@ -160,8 +162,9 @@ pub enum Msg {
 pub enum Effect {
     /// Read hosts, regenerate the ssh config → [`Msg::HostsLoaded`].
     LoadHosts,
-    /// Queue collection (background) → [`Msg::Collected`].
-    Collect(Vec<HostEntry>),
+    /// Queue collection (background) → [`Msg::Collected`]. Each job says
+    /// which tiers to read (see [`collector::Scope`]).
+    Collect(Vec<collector::Job>),
     /// → [`Msg::HostSaved`]
     SaveHost(HostEntry),
     /// → [`Msg::HostDeleted`]

@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use telepad_core::collector::Update;
+use telepad_core::collector::{DOWN_SSH_RETRY, SLOW_EVERY, STATIC_EVERY, Scope, Update};
 use telepad_core::config::{Access, HostEntry, Inventory};
 use telepad_core::model::HostReport;
 use telepad_core::store::{ImportMode, ImportSummary, UiPrefs};
@@ -46,7 +46,7 @@ fn loaded(s: &mut State, hosts: Vec<HostEntry>, now: Instant) -> Vec<Effect> {
 fn collect_aliases(fx: &[Effect]) -> Vec<String> {
     fx.iter()
         .filter_map(|e| match e {
-            Effect::Collect(h) => Some(h.iter().map(|h| h.alias.clone())),
+            Effect::Collect(jobs) => Some(jobs.iter().map(|j| j.host.alias.clone())),
             _ => None,
         })
         .flatten()
@@ -166,6 +166,214 @@ fn auto_refresh_waits_for_interval_and_idle_collector() {
 
     s.drafts.auto_refresh = false;
     assert!(collect_aliases(&update(&mut s, Msg::Tick { busy: 0 }, at(500))).is_empty());
+}
+
+fn scopes(fx: &[Effect]) -> Vec<Scope> {
+    fx.iter()
+        .filter_map(|e| match e {
+            Effect::Collect(jobs) => Some(jobs.iter().map(|j| j.scope)),
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+fn finished(
+    s: &mut State,
+    alias: &str,
+    result: Result<HostReport, String>,
+    scope: Scope,
+    no_ping: bool,
+    now: Instant,
+) {
+    update(
+        s,
+        Msg::Collected(Update::Done {
+            alias: alias.into(),
+            result: result.map(Box::new),
+            scope,
+            no_ping,
+            elapsed: Duration::from_millis(300),
+        }),
+        now,
+    );
+}
+
+#[test]
+fn automatic_refresh_reads_static_and_slow_facts_only_when_due() {
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    assert_eq!(
+        scopes(&loaded(&mut s, vec![host(1, "web01")], t0)),
+        [Scope::FULL]
+    );
+    let first = HostReport {
+        os_pretty: "Ubuntu 24.04 LTS".into(),
+        kernel: "6.8.0".into(),
+        uptime_secs: Some(1000),
+        maintenance: telepad_core::model::Maintenance {
+            updates: Some(4),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    finished(&mut s, "web01", Ok(first), Scope::FULL, false, t0);
+
+    // A minute later only live metrics; the kept facts survive a live result.
+    let t1 = t0 + Duration::from_secs(60);
+    assert_eq!(
+        scopes(&update(&mut s, Msg::Tick { busy: 0 }, t1)),
+        [Scope::LIVE]
+    );
+    let live = HostReport {
+        uptime_secs: Some(1060),
+        cpu_usage_pct: Some(12.0),
+        ..Default::default()
+    };
+    finished(&mut s, "web01", Ok(live), Scope::LIVE, false, t1);
+    let r = s.model.hosts[0].report.as_ref().unwrap();
+    assert_eq!(r.os_pretty, "Ubuntu 24.04 LTS");
+    assert_eq!(r.maintenance.updates, Some(4));
+    assert_eq!(r.cpu_usage_pct, Some(12.0));
+
+    // Clicking Refresh all reads everything.
+    assert_eq!(scopes(&update(&mut s, Msg::RefreshAll, t1)), [Scope::FULL]);
+    assert_eq!(scopes(&update(&mut s, Msg::Refresh(0), t1)), [Scope::FULL]);
+
+    let h = &s.model.hosts[0];
+    assert_eq!(
+        h.scope_at(t0 + SLOW_EVERY),
+        Scope {
+            slow: true,
+            ..Scope::LIVE
+        }
+    );
+    assert_eq!(h.scope_at(t0 + STATIC_EVERY), Scope::FULL);
+}
+
+#[test]
+fn a_reboot_reads_everything_on_the_next_round() {
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    loaded(&mut s, vec![host(1, "web01")], t0);
+    let up = |secs| HostReport {
+        uptime_secs: Some(secs),
+        ..Default::default()
+    };
+    finished(&mut s, "web01", Ok(up(5000)), Scope::FULL, false, t0);
+    let t1 = t0 + Duration::from_secs(60);
+    assert_eq!(s.model.hosts[0].scope_at(t1), Scope::LIVE);
+    finished(&mut s, "web01", Ok(up(30)), Scope::LIVE, false, t1);
+    assert_eq!(s.model.hosts[0].scope_at(t1), Scope::FULL);
+}
+
+#[test]
+fn a_host_without_ping_reply_is_only_pinged_until_it_answers() {
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    loaded(&mut s, vec![host(1, "web01")], t0);
+    finished(
+        &mut s,
+        "web01",
+        Err("connection timed out (no ping reply)".into()),
+        Scope::FULL,
+        true,
+        t0,
+    );
+    let h = &s.model.hosts[0];
+    assert!(h.no_ping);
+    assert!(h.scope_at(t0 + Duration::from_secs(60)).ping_first);
+
+    // Ping still silent: ssh was skipped, so the 10-minute ssh retry clock keeps running.
+    let t1 = t0 + Duration::from_secs(60);
+    let pinged = Scope {
+        ping_first: true,
+        ..Scope::FULL
+    };
+    finished(
+        &mut s,
+        "web01",
+        Err("no ping reply".into()),
+        pinged,
+        true,
+        t1,
+    );
+    assert_eq!(s.model.hosts[0].ssh_at, Some(t0));
+    assert!(!s.model.hosts[0].scope_at(t0 + DOWN_SSH_RETRY).ping_first);
+
+    // It answered ping and ssh worked: back to normal.
+    finished(
+        &mut s,
+        "web01",
+        Ok(HostReport::default()),
+        Scope::FULL,
+        false,
+        t1,
+    );
+    assert!(!s.model.hosts[0].scope_at(t1).ping_first);
+    assert_eq!(s.model.hosts[0].online(), Some(true));
+
+    // RDP-only hosts are already just ping + port probe.
+    let mut rdp = host(2, "win01");
+    rdp.access = Access::Rdp;
+    assert_eq!(HostState::new(rdp).scope_at(t1), Scope::FULL);
+}
+
+#[test]
+fn docker_overview_groups_containers_of_all_hosts_by_stack() {
+    use telepad_core::model::Container;
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    loaded(
+        &mut s,
+        vec![host(1, "docker01"), host(2, "docker02"), host(3, "db01")],
+        t0,
+    );
+    let c = |name: &str, stack: &str, running: bool| Container {
+        name: name.into(),
+        stack: stack.into(),
+        image: format!("example/{name}"),
+        state: if running { "running" } else { "exited" }.into(),
+        ..Default::default()
+    };
+    let with = |cs: Vec<Container>| {
+        let mut r = HostReport::default();
+        r.docker.containers = cs;
+        r
+    };
+    s.model.hosts[0].report = Some(with(vec![c("web", "shop", true), c("cron", "", true)]));
+    s.model.hosts[1].report = Some(with(vec![
+        c("db", "shop", false),
+        c("grafana", "monitoring", true),
+    ]));
+
+    let rows = docker_stacks(&s.model, "");
+    let names: Vec<&str> = rows.iter().map(|r| r.name).collect();
+    assert_eq!(names, ["monitoring", "shop", ""]);
+    let shop = &rows[1];
+    assert_eq!(shop.hosts(), [0, 1]);
+    assert_eq!((shop.running(), shop.containers.len()), (1, 2));
+
+    // Search: stack, container, image or host.
+    let names = |f: &str| -> Vec<String> {
+        docker_stacks(&s.model, f)
+            .iter()
+            .map(|r| r.name.to_string())
+            .collect()
+    };
+    assert_eq!(names("graf"), ["monitoring"]);
+    assert_eq!(names("docker01"), ["shop", ""]);
+    assert!(names("nothing").is_empty());
+
+    // The overview button switches pages and leaves the host page.
+    update(&mut s, Msg::Select(Some(2)), t0);
+    update(&mut s, Msg::ShowOverview(OverviewPage::Docker), t0);
+    assert_eq!(
+        (s.model.selected, s.model.overview),
+        (None, OverviewPage::Docker)
+    );
+    update(&mut s, Msg::ShowOverview(OverviewPage::Hosts), t0);
+    assert_eq!(s.model.overview, OverviewPage::Hosts);
 }
 
 #[test]
@@ -442,6 +650,8 @@ fn collection_results_update_host_state() {
     let done = |result| Update::Done {
         alias: "web01".into(),
         result,
+        scope: Scope::FULL,
+        no_ping: false,
         elapsed: Duration::from_millis(300),
     };
     let t1 = t0 + Duration::from_secs(1);

@@ -215,11 +215,43 @@ pub fn ago(t: Option<Instant>) -> String {
             let s = t.elapsed().as_secs();
             if s < 60 {
                 format!("{s}s ago")
-            } else {
+            } else if s < 3600 {
                 format!("{}m ago", s / 60)
+            } else {
+                format!("{}h {}m ago", s / 3600, s % 3600 / 60)
             }
         }
     }
+}
+
+/// Full-width page button that reads as a button in both themes: filled with
+/// the accent colour while its page is shown, otherwise a raised fill with an
+/// accent outline that brightens on hover.
+pub fn nav_button(ui: &mut egui::Ui, shown: bool, icon: &str, text: &str) -> egui::Response {
+    ui.scope(|ui| {
+        let accent = ui.visuals().selection.bg_fill;
+        let on_accent = ui.visuals().selection.stroke.color;
+        let strong = ui.visuals().strong_text_color();
+        let w = &mut ui.visuals_mut().widgets;
+        for (state, width) in [
+            (&mut w.inactive, 1.5),
+            (&mut w.hovered, 2.0),
+            (&mut w.active, 2.0),
+        ] {
+            state.bg_stroke = egui::Stroke::new(width, accent);
+            state.corner_radius = egui::CornerRadius::same(6);
+        }
+        w.hovered.weak_bg_fill = accent.gamma_multiply(0.35);
+        w.active.weak_bg_fill = accent.gamma_multiply(0.6);
+        let label = RichText::new(icons::label(icon, text)).strong().size(16.0);
+        let button = if shown {
+            egui::Button::new(label.color(on_accent)).fill(accent)
+        } else {
+            egui::Button::new(label.color(strong))
+        };
+        ui.add(button.min_size(egui::vec2(ui.available_width(), 36.0)))
+    })
+    .inner
 }
 
 pub fn section(ui: &mut egui::Ui, title: &str) {

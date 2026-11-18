@@ -6,7 +6,7 @@ use std::net::IpAddr;
 use std::time::Instant;
 
 use telepad_core::eol::Support;
-use telepad_core::model::{Disk, HostReport, Maintenance, SensorKind};
+use telepad_core::model::{Container, Disk, HostReport, Maintenance, SensorKind};
 
 use crate::state::{HostState, Model, matches_filter};
 
@@ -414,6 +414,69 @@ pub fn host_list_groups(
 }
 
 /// The highest of CPU, memory and fullest-disk usage, with its name.
+/// One stack in the Docker overview: every container with this compose project
+/// name, from every host. `name` is empty for containers outside any stack.
+#[derive(Debug, Clone)]
+pub struct StackRow<'a> {
+    pub name: &'a str,
+    /// (host index, container), by host order then running first.
+    pub containers: Vec<(usize, &'a Container)>,
+}
+
+impl StackRow<'_> {
+    pub fn running(&self) -> usize {
+        self.containers.iter().filter(|(_, c)| c.running()).count()
+    }
+
+    /// Host indexes this stack runs on, in inventory order.
+    pub fn hosts(&self) -> Vec<usize> {
+        let mut v: Vec<usize> = self.containers.iter().map(|(i, _)| *i).collect();
+        v.dedup();
+        v
+    }
+}
+
+/// Docker overview: containers of all hosts grouped by stack, named stacks A–Z,
+/// standalone containers last. The search matches stack, container, image or host.
+pub fn docker_stacks<'a>(m: &'a Model, filter: &str) -> Vec<StackRow<'a>> {
+    let f = filter.to_lowercase();
+    let mut rows: Vec<StackRow<'a>> = Vec::new();
+    for (i, h) in m.hosts.iter().enumerate() {
+        let Some(r) = &h.report else { continue };
+        let host_hit = f.is_empty()
+            || h.entry.alias.to_lowercase().contains(&f)
+            || h.entry.hostname.to_lowercase().contains(&f);
+        for c in &r.docker.containers {
+            let hit = host_hit
+                || [c.stack.as_str(), &c.name, &c.image]
+                    .iter()
+                    .any(|s| s.to_lowercase().contains(&f));
+            if !hit {
+                continue;
+            }
+            match rows.iter_mut().find(|s| s.name == c.stack) {
+                Some(s) => s.containers.push((i, c)),
+                None => rows.push(StackRow {
+                    name: &c.stack,
+                    containers: vec![(i, c)],
+                }),
+            }
+        }
+    }
+    rows.sort_by(|a, b| {
+        a.name
+            .is_empty()
+            .cmp(&b.name.is_empty())
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    for s in &mut rows {
+        // Stable: hosts keep inventory order, containers their report order.
+        s.containers
+            .sort_by(|a, b| a.0.cmp(&b.0).then(b.1.running().cmp(&a.1.running())));
+    }
+    rows
+}
+
 pub fn worst_usage(r: &HostReport) -> Option<(&'static str, f32)> {
     [
         ("CPU", r.cpu_usage_pct),

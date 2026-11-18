@@ -3,7 +3,7 @@
 
 use std::time::{Duration, Instant};
 
-use telepad_core::collector;
+use telepad_core::collector::{self, Job, Scope};
 use telepad_core::config::{Access, HostEntry};
 use telepad_core::docker_actions::{ComposeProject, Plan};
 use telepad_core::model::{Container, Manager};
@@ -66,14 +66,15 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
             }
             let interval = Duration::from_secs(u64::from(d.interval_secs));
             if d.auto_refresh && busy == 0 && elapsed(m.last_refresh, now) >= Some(interval) {
-                refresh_all(m, now, &mut fx);
+                refresh_all(m, now, false, &mut fx);
             }
         }
 
-        Msg::RefreshAll => refresh_all(m, now, &mut fx),
+        // Asked for by the user: everything, not only what is due.
+        Msg::RefreshAll => refresh_all(m, now, true, &mut fx),
         Msg::Refresh(i) => {
             if let Some(h) = m.hosts.get(i).filter(|h| !h.entry.unmonitored) {
-                fx.push(Effect::Collect(vec![h.entry.clone()]));
+                fx.push(Effect::Collect(vec![full(&h.entry)]));
             }
         }
         Msg::Ssh(i) => {
@@ -236,6 +237,10 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
             }
         }
         Msg::Select(i) => m.selected = i.filter(|&i| i < m.hosts.len()),
+        Msg::ShowOverview(page) => {
+            m.selected = None;
+            m.overview = page;
+        }
         Msg::SortBy(key) => d.sort = d.sort.clicked(key),
         Msg::SetCompactHostList(compact) => {
             if d.compact_host_list != compact {
@@ -544,15 +549,27 @@ fn selected_id(m: &Model) -> Option<i64> {
         .and_then(|h| h.entry.id)
 }
 
-fn refresh_all(m: &mut Model, now: Instant, fx: &mut Vec<Effect>) {
+/// Collect every monitored host: everything when the user asked (`manual`),
+/// otherwise only the tiers that are due (live metrics always).
+fn refresh_all(m: &mut Model, now: Instant, manual: bool, fx: &mut Vec<Effect>) {
     fx.push(Effect::Collect(
         m.hosts
             .iter()
             .filter(|h| !h.entry.unmonitored)
-            .map(|h| h.entry.clone())
+            .map(|h| Job {
+                host: h.entry.clone(),
+                scope: if manual { Scope::FULL } else { h.scope_at(now) },
+            })
             .collect(),
     ));
     m.last_refresh = Some(now);
+}
+
+fn full(entry: &HostEntry) -> Job {
+    Job {
+        host: entry.clone(),
+        scope: Scope::FULL,
+    }
 }
 
 fn start_check(m: &mut Model, now: Instant, manual: bool, fx: &mut Vec<Effect>) {
@@ -583,7 +600,7 @@ fn reconcile(m: &mut Model, entries: Vec<HostEntry>, now: Instant, fx: &mut Vec<
             Some(h) if h.entry == entry => h,
             _ => {
                 if !entry.unmonitored {
-                    to_poll.push(entry.clone());
+                    to_poll.push(full(&entry));
                 }
                 HostState::new(entry)
             }
@@ -609,14 +626,40 @@ fn collected(m: &mut Model, u: collector::Update, now: Instant) {
         collector::Update::Done {
             alias,
             result,
+            scope,
+            no_ping,
             elapsed,
         } => {
             if let Some(h) = m.hosts.iter_mut().find(|h| h.entry.alias == alias) {
                 h.loading = false;
                 h.updated = Some(now);
                 h.elapsed = Some(elapsed);
+                h.no_ping = no_ping;
+                if !scope.ping_first {
+                    h.ssh_at = Some(now);
+                }
                 match result {
-                    Ok(r) => {
+                    Ok(mut r) => {
+                        let prev = h.report.take();
+                        if let Some(prev) = &prev {
+                            scope.carry_over(&mut r, prev);
+                        }
+                        if scope.static_info {
+                            h.static_at = Some(now);
+                        }
+                        if scope.slow {
+                            h.slow_at = Some(now);
+                        }
+                        // Rebooted since the last look: kernel, updates and the
+                        // reboot flag have likely changed, so read everything next time.
+                        let rebooted = prev
+                            .and_then(|p| p.uptime_secs)
+                            .zip(r.uptime_secs)
+                            .is_some_and(|(before, after)| after < before);
+                        if rebooted {
+                            h.static_at = None;
+                            h.slow_at = None;
+                        }
                         h.report = Some(*r);
                         h.error = None;
                     }
