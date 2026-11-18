@@ -2,6 +2,39 @@
 
 Newest first.
 
+## [2026-11-18] — Tested and merged: #49
+- Windows 11 x86_64: fmt, clippy, 112 tests, release build; CI on Windows, macOS, Linux.
+- GUI on a throwaway database: invalid key error, fingerprint (= `ssh-keygen -lf`), select
+  all / indeterminate / filter, typed confirmation, Add and Revoke runs (unreachable hosts:
+  clear "connection timed out" per host), lockout guard refused revoking the login key
+  without starting ssh.
+- Real hosts `backup` and `dockercenter` (owner's OK, owner's key): Add → dockercenter
+  added / backup already present; Revoke → both removed, dockercenter file back to its
+  original SHA-256, mode 600 kept, no temp files left; Add again → key left on both, as asked.
+- Fixed while testing: window kept on screen with scrolling content; shorter refusal text.
+
+## [2026-11-18] — feat(keys): add or revoke an SSH public key on selected servers (#49)
+- Issue #49 addressed on GitHub.
+- Core `authorized_keys.rs`: `PublicKey::parse` (type list, strict base64, embedded type,
+  no options / private keys), `fingerprint` (= `ssh-keygen -lf`), remote add/revoke script
+  (here-doc key, awk match on type + data, temp copy + `mv`, symlink refused),
+  `login_keys` lockout guard, `apply_all` (bounded threads). `collector::run_script` /
+  `base64` now `pub(crate)`.
+- App: `KeysDraft` (text, filter, selected ids, typed confirmation), `KeyRun` results;
+  `Msg::KeysOpen/Close/SelectAll/Toggle/Ask/ConfirmCancel/Run/KeyResult`,
+  `Effect::ApplyKey`; 2 `update()` tests.
+- GUI: `views/keys.rs` (☰ → Public keys…), runtime thread per run, icons KEY /
+  CHECK_CIRCLE / X_CIRCLE.
+- Docs: AGENTS.md (third write exception), USER_MANUAL, README, SECURITY.
+- Verified: fmt, clippy, 112 tests (script run against a temp HOME with the local sh),
+  release build. Not verified yet: real hosts and the GUI (tester).
+
+## [2026-11-18] — feat(keys): add or revoke an SSH public key on selected servers
+- Issue #49 created on GitHub
+- Scope: telepad-core / telepad-app / telepad-gui (new key window, in-app write action)
+- Labels: enhancement
+- Owner decision: runs in-app after a typed confirmation (third read-only exception)
+
 ## [2026-11-18] — Telepad 0.7.0
 - Faster refresh: live metrics every round, addresses / ports / updates every 6 h, OS and
   hardware facts once a day, hosts without SSH only pinged (#36).

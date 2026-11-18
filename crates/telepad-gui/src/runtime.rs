@@ -12,6 +12,7 @@ use std::time::Instant;
 
 use eframe::egui;
 use telepad_app::{Effect, Msg, State};
+use telepad_core::authorized_keys;
 use telepad_core::collector::{self, Collector, SshSettings};
 use telepad_core::store;
 use telepad_core::update::{self, Updater, relaunch};
@@ -262,6 +263,24 @@ impl Runtime {
             )),
             Effect::SaveUiPrefs(p) => {
                 Some(Msg::UiPrefsSaved(self.with_store(|s| s.set_ui_prefs(&p))))
+            }
+            Effect::ApplyKey { action, key, hosts } => {
+                let s = self.ssh.clone()?;
+                let (tx, ctx) = (self.tx.clone(), self.ctx.clone());
+                thread::spawn(move || {
+                    authorized_keys::apply_all(
+                        &s,
+                        &hosts,
+                        action,
+                        &key,
+                        WORKERS,
+                        |alias, outcome| {
+                            let _ = tx.send(Msg::KeyResult { alias, outcome });
+                            ctx.request_repaint();
+                        },
+                    );
+                });
+                None
             }
             Effect::OpenUrl(url) => platform::open_url(&url).err().map(Msg::Notice),
             Effect::Relaunch => match relaunch() {

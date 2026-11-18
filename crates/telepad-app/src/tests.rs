@@ -1460,3 +1460,120 @@ fn automatic_install_only_when_enabled_and_installable() {
         t0
     )));
 }
+
+/// A made-up ed25519 public key (never a real one).
+const FAKE_KEY: &str = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcH alice@example.com";
+
+fn keys_state(t0: Instant) -> State {
+    let (mut s, _) = started(t0);
+    let mut win = host(4, "win01");
+    win.access = Access::Rdp;
+    loaded(
+        &mut s,
+        vec![host(1, "web01"), host(2, "web02"), host(3, "db01"), win],
+        t0,
+    );
+    update(&mut s, Msg::KeysOpen, t0);
+    s
+}
+
+#[test]
+fn key_window_selects_all_listed_ssh_hosts_and_toggles() {
+    let t0 = Instant::now();
+    let mut s = keys_state(t0);
+    let sel = |s: &State| s.drafts.keys.as_ref().unwrap().selected.clone();
+
+    update(&mut s, Msg::KeysSelectAll(true), t0);
+    assert_eq!(
+        sel(&s),
+        [1, 2, 3].into(),
+        "RDP-only win01 is not selectable"
+    );
+
+    update(&mut s, Msg::KeysSelectAll(false), t0);
+    assert!(sel(&s).is_empty());
+
+    // Select all respects the filter.
+    s.drafts.keys.as_mut().unwrap().filter = "web".into();
+    update(&mut s, Msg::KeysSelectAll(true), t0);
+    assert_eq!(sel(&s), [1, 2].into());
+
+    update(&mut s, Msg::KeysToggle(3), t0);
+    update(&mut s, Msg::KeysToggle(1), t0);
+    update(&mut s, Msg::KeysToggle(4), t0);
+    update(&mut s, Msg::KeysToggle(99), t0);
+    assert_eq!(sel(&s), [2, 3].into());
+}
+
+#[test]
+fn key_run_needs_a_valid_key_hosts_and_the_typed_word() {
+    use telepad_core::authorized_keys::{KeyAction, KeyOutcome};
+    let t0 = Instant::now();
+    let mut s = keys_state(t0);
+
+    // No key / no hosts: no confirmation.
+    update(&mut s, Msg::KeysSelectAll(true), t0);
+    update(&mut s, Msg::KeysAsk(KeyAction::Revoke), t0);
+    assert_eq!(s.drafts.keys.as_ref().unwrap().confirm, None);
+    s.drafts.keys.as_mut().unwrap().text = FAKE_KEY.into();
+    update(&mut s, Msg::KeysSelectAll(false), t0);
+    update(&mut s, Msg::KeysAsk(KeyAction::Revoke), t0);
+    assert_eq!(s.drafts.keys.as_ref().unwrap().confirm, None);
+
+    update(&mut s, Msg::KeysToggle(3), t0);
+    update(&mut s, Msg::KeysToggle(1), t0);
+    update(&mut s, Msg::KeysAsk(KeyAction::Revoke), t0);
+    assert_eq!(
+        s.drafts.keys.as_ref().unwrap().confirm,
+        Some(KeyAction::Revoke)
+    );
+
+    // Wrong word: nothing runs.
+    s.drafts.keys.as_mut().unwrap().typed = "add".into();
+    assert!(update(&mut s, Msg::KeysRun, t0).is_empty());
+    s.drafts.keys.as_mut().unwrap().typed = " revoke ".into();
+    let fx = update(&mut s, Msg::KeysRun, t0);
+    let [Effect::ApplyKey { action, key, hosts }] = &fx[..] else {
+        panic!("{fx:?}")
+    };
+    assert_eq!(*action, KeyAction::Revoke);
+    assert_eq!(key.comment, "alice@example.com");
+    let aliases: Vec<&str> = hosts.iter().map(|h| h.alias.as_str()).collect();
+    assert_eq!(aliases, ["web01", "db01"], "list order");
+    assert_eq!(s.drafts.keys.as_ref().unwrap().confirm, None);
+    let run = s.model.key_run.as_ref().unwrap();
+    assert!(run.running());
+    assert!(run.fingerprint.starts_with("SHA256:"));
+
+    // While it runs, no second run.
+    update(&mut s, Msg::KeysAsk(KeyAction::Add), t0);
+    assert_eq!(s.drafts.keys.as_ref().unwrap().confirm, None);
+
+    // Results arrive in any order; the last one reports a summary.
+    update(
+        &mut s,
+        Msg::KeyResult {
+            alias: "db01".into(),
+            outcome: KeyOutcome::Removed(1),
+        },
+        t0,
+    );
+    assert!(s.model.key_run.as_ref().unwrap().running());
+    update(
+        &mut s,
+        Msg::KeyResult {
+            alias: "web01".into(),
+            outcome: KeyOutcome::Failed("connection timed out".into()),
+        },
+        t0,
+    );
+    let run = s.model.key_run.as_ref().unwrap();
+    assert!(!run.running());
+    assert_eq!(run.results[1].1, Some(KeyOutcome::Removed(1)));
+    let msg = s.model.message_at(t0).unwrap();
+    assert!(msg.contains("1 of 2") && msg.contains("1 failed"), "{msg}");
+
+    // Closing a finished run clears it.
+    update(&mut s, Msg::KeysClose, t0);
+    assert!(s.drafts.keys.is_none() && s.model.key_run.is_none());
+}

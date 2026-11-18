@@ -1,3 +1,4 @@
+pub mod authorized_keys;
 pub mod cluster;
 pub mod collector;
 pub mod config;

@@ -289,6 +289,35 @@ machine that is down looks different from one where only SSH is broken.
 `telepad.db` is a normal SQLite file: back it up by copying it while Telepad is closed,
 or use Export. You can also inspect it with any SQLite tool.
 
+## Public keys (add / revoke)
+
+**☰ → Public keys… (add / revoke)** gives someone SSH access to many hosts at once, or
+takes it away, using the access Telepad already has. It changes only the
+`~/.ssh/authorized_keys` file of the user Telepad logs in as on each host (no `sudo`).
+
+1. Paste one public key: the single line from a `.pub` file, for example
+   `ssh-ed25519 AAAAC3Nza… alice@example.com`. Telepad shows its type, its SHA256
+   fingerprint (the same as `ssh-keygen -lf`) and its comment, or why it is not a valid
+   key. Private keys, several lines and keys with options (`from=`, `command=`) are refused.
+2. Tick the hosts. **Select all** ticks every host the filter shows (click again to clear
+   them); the filter box narrows the list by name, address, description or OS. RDP-only
+   hosts are listed but cannot be ticked. The number of selected hosts is shown.
+3. Click **Add key** or **Revoke key**. Telepad lists the key and every selected host;
+   type `add` or `revoke` and press Enter (or the button) to start, or **Cancel**.
+4. The hosts are done in parallel; each shows its result:
+   - **added** / **already present (not changed)** for Add,
+   - **removed** / **not present (not changed)** for Revoke,
+   - **refused** — an RDP-only host, or the key Telepad itself logs in with (revoking it
+     would lock Telepad out of that host),
+   - **failed** with the reason (host down, `~/.ssh` not writable, …).
+
+   The status bar sums it up when all hosts are done.
+
+Add creates `~/.ssh` (mode 700) and `authorized_keys` (mode 600) when they are missing
+and never adds a key twice. Revoke removes every line with that key, whatever its comment
+or options. Other lines are never touched, and the file is rewritten through a temporary
+copy, so a failure leaves it as it was.
+
 ## Fan speeds and BMC temperatures (IPMI)
 
 CPU temperatures work without setup. Fans and inlet/exhaust temperatures on physical

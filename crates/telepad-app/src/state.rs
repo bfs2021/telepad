@@ -4,6 +4,9 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use std::collections::BTreeSet;
+
+use telepad_core::authorized_keys::{KeyAction, KeyOutcome};
 use telepad_core::collector::{self, Scope};
 use telepad_core::config::{Access, HostEntry, Inventory};
 use telepad_core::model::HostReport;
@@ -39,6 +42,28 @@ pub struct Model {
     pub select_after_load: Option<i64>,
     pub import: Option<ImportDialog>,
     pub update: UpdateState,
+    /// Last "Public keys…" run: one result per host as they come in.
+    pub key_run: Option<KeyRun>,
+}
+
+/// A key added to / revoked from several hosts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyRun {
+    pub action: KeyAction,
+    pub fingerprint: String,
+    pub comment: String,
+    /// Host alias and its result (None while it runs).
+    pub results: Vec<(String, Option<KeyOutcome>)>,
+}
+
+impl KeyRun {
+    pub fn finished(&self) -> usize {
+        self.results.iter().filter(|(_, r)| r.is_some()).count()
+    }
+
+    pub fn running(&self) -> bool {
+        self.finished() < self.results.len()
+    }
 }
 
 /// Values views bind to widgets directly. Changing them never does I/O.
@@ -65,6 +90,46 @@ pub struct Drafts {
     pub run_info: Option<RunInfoView>,
     /// "Import from pasted text" window.
     pub paste: Option<PasteImport>,
+    /// "Public keys…" window.
+    pub keys: Option<KeysDraft>,
+}
+
+/// "Public keys…" window: the pasted key, the chosen hosts and the
+/// confirmation being typed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KeysDraft {
+    pub text: String,
+    /// Narrows the host list (alias, address, description, OS).
+    pub filter: String,
+    /// Host ids.
+    pub selected: BTreeSet<i64>,
+    /// Waiting for the user to type the action word.
+    pub confirm: Option<KeyAction>,
+    pub typed: String,
+}
+
+impl KeysDraft {
+    /// Hosts the window lists (matching the filter), as indices into `m.hosts`.
+    pub fn listed(&self, m: &Model) -> Vec<usize> {
+        let f = self.filter.trim();
+        (0..m.hosts.len())
+            .filter(|&i| matches_filter(f, &m.hosts[i]))
+            .collect()
+    }
+
+    /// Selected hosts that still exist and have SSH, in list order.
+    pub fn chosen<'a>(&self, m: &'a Model) -> Vec<&'a HostEntry> {
+        m.hosts
+            .iter()
+            .map(|h| &h.entry)
+            .filter(|e| key_selectable(e) && e.id.is_some_and(|id| self.selected.contains(&id)))
+            .collect()
+    }
+}
+
+/// A host the key window can change: saved, with SSH (not RDP-only).
+pub fn key_selectable(e: &HostEntry) -> bool {
+    e.id.is_some() && e.access != Access::Rdp
 }
 
 /// Text the user pastes, and why parts of it could not be read.
@@ -98,6 +163,7 @@ impl Default for Drafts {
             theme: ThemePref::System,
             run_info: None,
             paste: None,
+            keys: None,
         }
     }
 }

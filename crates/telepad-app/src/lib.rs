@@ -16,8 +16,8 @@ mod update;
 
 pub use msg::{Effect, Msg};
 pub use state::{
-    Drafts, Editor, HostState, ImportDialog, MESSAGE_TTL, Model, OverviewPage, PasteImport,
-    RunInfoView, State, UpdatePhase, UpdateState, matches_filter,
+    Drafts, Editor, HostState, ImportDialog, KeyRun, KeysDraft, MESSAGE_TTL, Model, OverviewPage,
+    PasteImport, RunInfoView, State, UpdatePhase, UpdateState, key_selectable, matches_filter,
 };
 pub use table::{
     Flag, FlagKind, HostGroup, Severity, Sort, SortKey, StackRow, can_reorder, cluster_shown_by,
