@@ -192,6 +192,6 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #27 | feat(ui): light / dark / system theme switch | closed | 2026-11-17 |
 | #28 | feat(cluster): Docker Swarm and Kubernetes panel | closed | 2026-11-17 |
 | #34 | fix(update): update check fails behind a shared IP (GitHub API rate limit) | ready-for-review | 2026-11-17 |
-| #36 | perf(collector): tiered collection — live, 6-hourly, daily and ping-only checks | open | 2026-11-18 |
-| #37 | feat(ui): Overview — Docker page grouping containers of all hosts by stack | open | 2026-11-18 |
-| #38 | fix(ui): overview buttons look flat in light and dark themes | open | 2026-11-18 |
+| #36 | perf(collector): tiered collection — live, 6-hourly, daily and ping-only checks | ready-for-review | 2026-11-18 |
+| #37 | feat(ui): Overview — Docker page grouping containers of all hosts by stack | ready-for-review | 2026-11-18 |
+| #38 | fix(ui): overview buttons look flat in light and dark themes | ready-for-review | 2026-11-18 |

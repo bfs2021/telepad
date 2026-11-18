@@ -2,6 +2,26 @@
 
 Newest first.
 
+## [2026-11-18] — feat(ui): Docker overview and overview buttons checked on real data (#37, #38)
+- Issues #37 and #38 addressed on GitHub (PR #39); status ready-for-review.
+- Release GUI against the real inventory: Docker page shows 68 stacks / 324 containers on
+  31 hosts with Portainer and compose controls, in dark and light theme.
+- Fix found while checking: untagged images (`sha256:…`) and `docker.io/` names widened the
+  image column and pushed IPs / ports off screen; `Container::short_image` now shortens them
+  (full name on hover).
+- Fix found while checking: the inactive overview button's outline was too pale in the light
+  theme; it now uses the dark accent text colour there.
+- Files: `model.rs`, `views/docker_overview.rs`, `widgets.rs`, `tests.rs`.
+
+## [2026-11-18] — perf(collector): tiered collection verified on real hosts (#36)
+- Issue #36 addressed on GitHub (PR #39); status ready-for-review.
+- `telepad-check --json` on the full inventory: 49 SSH hosts collected with OS, CPU,
+  addresses, ports, updates and containers; failures only from existing access problems.
+- Live tier against real hosts skips HOSTNAME/OSRELEASE/UNAME/CPUINFO/IPADDR/LISTEN/UPDATES:
+  `backup` 5.9 s → 1.6 s, `dockercenter` (85 containers) 5.3 s → 4.5 s per round.
+- Files: `script.sh`, `collector.rs`, `state.rs`, `update.rs`, `msg.rs`, `tests.rs`,
+  `views/detail.rs`, `widgets.rs`, `docs/USER_MANUAL.md`, `AGENTS.md`.
+
 ## [2026-11-18] — perf(collector): tiered collection, Docker overview, overview buttons (#36, #37, #38)
 - Issues #36 (enhancement), #37 (enhancement), #38 (bug, accessibility) created on GitHub.
 - #36: `script.sh` tiers `TP_STATIC` (daily: hostname, OS, kernel, CPU model) and `TP_SLOW`

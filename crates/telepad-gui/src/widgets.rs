@@ -231,6 +231,12 @@ pub fn nav_button(ui: &mut egui::Ui, shown: bool, icon: &str, text: &str) -> egu
     ui.scope(|ui| {
         let accent = ui.visuals().selection.bg_fill;
         let on_accent = ui.visuals().selection.stroke.color;
+        // The light theme's accent fill is too pale for a 1.5 px outline.
+        let outline = if ui.visuals().dark_mode {
+            accent
+        } else {
+            on_accent
+        };
         let strong = ui.visuals().strong_text_color();
         let w = &mut ui.visuals_mut().widgets;
         for (state, width) in [
@@ -238,7 +244,7 @@ pub fn nav_button(ui: &mut egui::Ui, shown: bool, icon: &str, text: &str) -> egu
             (&mut w.hovered, 2.0),
             (&mut w.active, 2.0),
         ] {
-            state.bg_stroke = egui::Stroke::new(width, accent);
+            state.bg_stroke = egui::Stroke::new(width, outline);
             state.corner_radius = egui::CornerRadius::same(6);
         }
         w.hovered.weak_bg_fill = accent.gamma_multiply(0.35);

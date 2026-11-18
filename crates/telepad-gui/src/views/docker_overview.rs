@@ -186,7 +186,11 @@ fn containers(ui: &mut egui::Ui, stack: &str, host: usize, cs: &[&Container], ou
                     n = n.color(portainer_color());
                 }
                 ui.label(n);
-                ui.label(RichText::new(&c.image).weak());
+                let image = c.short_image();
+                let resp = ui.label(RichText::new(&image).weak());
+                if image != c.image {
+                    resp.on_hover_text(&c.image);
+                }
                 ui.label(&c.status);
                 let ips: Vec<String> = c
                     .networks

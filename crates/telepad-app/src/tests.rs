@@ -374,6 +374,21 @@ fn docker_overview_groups_containers_of_all_hosts_by_stack() {
     );
     update(&mut s, Msg::ShowOverview(OverviewPage::Hosts), t0);
     assert_eq!(s.model.overview, OverviewPage::Hosts);
+
+    // Narrow image column: no docker.io/ prefix, untagged image IDs cut like `docker ps`.
+    let img = |image: &str| Container {
+        image: image.into(),
+        ..Default::default()
+    };
+    assert_eq!(
+        img("docker.io/library/nginx:stable").short_image(),
+        "library/nginx:stable"
+    );
+    assert_eq!(
+        img("sha256:e00cccc803a80012cbaddb6450b8").short_image(),
+        "e00cccc803a8…"
+    );
+    assert_eq!(img("ghcr.io/org/app:1").short_image(), "ghcr.io/org/app:1");
 }
 
 #[test]
