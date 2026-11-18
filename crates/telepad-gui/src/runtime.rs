@@ -145,6 +145,11 @@ impl Runtime {
                     .pick_file()?;
                 Some(read_import(path))
             }
+            Effect::ReadClipboard => Some(Msg::ClipboardRead(
+                arboard::Clipboard::new()
+                    .and_then(|mut c| c.get_text())
+                    .map_err(|e| e.to_string()),
+            )),
             Effect::ReadUserSshConfig => {
                 Some(read_import(telepad_core::expand_home("~/.ssh/config")))
             }

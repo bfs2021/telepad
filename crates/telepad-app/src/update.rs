@@ -11,7 +11,9 @@ use telepad_core::store::{ImportMode, ImportSummary};
 use telepad_core::update::{CHECK_EVERY, CURRENT_VERSION, RETRY_AFTER_FAILURE, UpdateConfig};
 
 use crate::msg::{Effect, Msg};
-use crate::state::{Editor, HostState, ImportDialog, Model, RunInfoView, State, UpdatePhase};
+use crate::state::{
+    Editor, HostState, ImportDialog, Model, PasteImport, RunInfoView, State, UpdatePhase,
+};
 
 /// Apply `msg` to `state` at time `now`; return the effects to run.
 pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
@@ -353,11 +355,47 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
                     inventory,
                     mode: ImportMode::Merge,
                     preview: Ok(ImportSummary::default()),
+                    skipped: Vec::new(),
                 });
             }
         }
         Msg::ImportOpened(Err((path, e))) => {
             say(m, now, format!("Cannot import {}: {e}", path.display()));
+        }
+        Msg::PasteImport => d.paste = Some(PasteImport::default()),
+        Msg::PasteCancel => d.paste = None,
+        Msg::PasteFromClipboard => fx.push(Effect::ReadClipboard),
+        Msg::ClipboardRead(r) => match (&mut d.paste, r) {
+            (Some(p), Ok(text)) => {
+                if !p.text.trim().is_empty() && !p.text.ends_with('\n') {
+                    p.text.push('\n');
+                }
+                p.text.push_str(&text);
+            }
+            (Some(p), Err(e)) => p.problems = vec![format!("Cannot read the clipboard: {e}")],
+            (None, _) => {}
+        },
+        Msg::PasteApply => {
+            if let Some(p) = &mut d.paste {
+                let (inventory, problems) = telepad_core::store::parse_pasted(&p.text);
+                if inventory.hosts.is_empty() {
+                    p.problems = problems;
+                    p.problems.insert(0, "No hosts found in the text".into());
+                } else {
+                    d.paste = None;
+                    fx.push(Effect::PreviewImport {
+                        inventory: inventory.clone(),
+                        mode: ImportMode::Merge,
+                    });
+                    m.import = Some(ImportDialog {
+                        path: "pasted text".into(),
+                        inventory,
+                        mode: ImportMode::Merge,
+                        preview: Ok(ImportSummary::default()),
+                        skipped: problems,
+                    });
+                }
+            }
         }
         Msg::ImportMode(mode) => {
             if let Some(dlg) = &mut m.import

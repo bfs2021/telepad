@@ -644,6 +644,50 @@ fn import_previews_applies_and_keeps_dialog_on_failure() {
 }
 
 #[test]
+fn pasted_text_goes_to_the_import_preview_with_skipped_lines() {
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    update(&mut s, Msg::PasteImport, t0);
+    assert!(s.drafts.paste.is_some());
+
+    // Clipboard text is appended on its own line.
+    assert!(matches!(
+        update(&mut s, Msg::PasteFromClipboard, t0)[..],
+        [Effect::ReadClipboard]
+    ));
+    s.drafts.paste.as_mut().unwrap().text = "web01 192.0.2.10".into();
+    update(
+        &mut s,
+        Msg::ClipboardRead(Ok("web02 192.0.2.11".into())),
+        t0,
+    );
+    assert_eq!(
+        s.drafts.paste.as_ref().unwrap().text,
+        "web01 192.0.2.10\nweb02 192.0.2.11"
+    );
+
+    // Nothing readable: stay in the window and say why.
+    s.drafts.paste.as_mut().unwrap().text = "one two three".into();
+    assert!(update(&mut s, Msg::PasteApply, t0).is_empty());
+    let p = s.drafts.paste.as_ref().unwrap();
+    assert_eq!(p.problems[0], "No hosts found in the text");
+    assert!(p.problems[1].starts_with("line 1:"));
+
+    // Readable hosts go to the usual preview; bad lines are listed there.
+    s.drafts.paste.as_mut().unwrap().text = "web01 192.0.2.10\nx y z\n".into();
+    let fx = update(&mut s, Msg::PasteApply, t0);
+    assert!(matches!(fx[..], [Effect::PreviewImport { .. }]));
+    assert!(s.drafts.paste.is_none());
+    let dlg = s.model.import.as_ref().unwrap();
+    assert_eq!(dlg.inventory.hosts.len(), 1);
+    assert_eq!(dlg.skipped.len(), 1);
+
+    update(&mut s, Msg::PasteImport, t0);
+    update(&mut s, Msg::PasteCancel, t0);
+    assert!(s.drafts.paste.is_none());
+}
+
+#[test]
 fn import_from_user_ssh_config_reads_it_without_a_dialog() {
     let mut s = State::default();
     let fx = update(&mut s, Msg::ImportSshConfig, Instant::now());

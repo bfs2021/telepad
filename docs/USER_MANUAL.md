@@ -252,10 +252,25 @@ machine that is down looks different from one where only SSH is broken.
 
   Either way a preview comes first:
   - **Merge — add new, update same alias, keep others**
-  - **Replace — hosts become exactly this file**
+  - **Replace — hosts become exactly this list**
 
   An import is all or nothing: if any host is invalid, nothing changes. Global
   `Host *` / `Match` blocks are imported too.
+- **☰ → Import from pasted text…** opens a text box: paste with Ctrl+V or
+  **Paste from clipboard**, then **Next: preview**. It reads OpenSSH config text
+  (`Host` blocks) or JSON as above, or a simple list with one host per line:
+
+  ```
+  web01 admin@192.0.2.10
+  nas01 192.0.2.20:2222
+  198.51.100.7
+  ```
+
+  that is `[alias] [user@]host[:port]` (without an alias the address becomes the
+  alias; port 22 when none is given). Blank lines and `#` comments are skipped.
+  Lines that cannot be read and invalid hosts are left out and listed with their
+  line number in the preview; the other hosts can still be imported. If nothing
+  can be read, the window stays open and says why.
 - **☰ → Export…** writes `.json` (re-importable, keeps every field) or OpenSSH
   config text. Hosts that are not monitored or RDP-only are marked with
   `# telepad: not monitored` / `# telepad: rdp only` comments so they round-trip.

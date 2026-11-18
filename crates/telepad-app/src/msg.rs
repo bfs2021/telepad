@@ -109,6 +109,12 @@ pub enum Msg {
     Import,
     /// Import the user's own `~/.ssh/config` without a file dialog.
     ImportSshConfig,
+    /// "Import from pasted text…" window.
+    PasteImport,
+    PasteFromClipboard,
+    /// Read the pasted text and go to the import preview.
+    PasteApply,
+    PasteCancel,
     ImportMode(ImportMode),
     ImportApply,
     ImportCancel,
@@ -152,6 +158,7 @@ pub enum Msg {
     UpdateSettingsSaved(Result<UpdateConfig, String>),
     UiPrefsSaved(Result<(), String>),
     RunInfoLoaded(RunInfo),
+    ClipboardRead(Result<String, String>),
     /// Text for the status bar (e.g. from opening a terminal).
     Notice(String),
 }
@@ -193,6 +200,8 @@ pub enum Effect {
     PickKeyFile(String),
     /// List private keys in `~/.ssh` → [`Msg::KeysFound`].
     FindKeys,
+    /// Text on the clipboard → [`Msg::ClipboardRead`].
+    ReadClipboard,
     /// The following four report with [`Msg::Notice`].
     OpenSsh(HostEntry),
     OpenRdp(HostEntry),

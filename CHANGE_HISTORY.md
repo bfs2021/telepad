@@ -2,6 +2,19 @@
 
 Newest first.
 
+## [2026-11-18] — feat(import): import hosts from pasted plain text (#42)
+- Issue #42 addressed on GitHub.
+- `store.rs`: `parse_pasted` — JSON / OpenSSH config text via `parse_import`, otherwise
+  `[alias] [user@]host[:port]` per line; unreadable lines and invalid hosts are listed.
+- App: `Msg::PasteImport/PasteFromClipboard/ClipboardRead/PasteApply/PasteCancel`,
+  `Effect::ReadClipboard`, `Drafts::paste`, `ImportDialog::skipped`; GUI paste window,
+  menu item, skipped lines in the preview; `arboard` (already in the lock file via eframe).
+- Files: `store.rs`, `msg.rs`, `state.rs`, `update.rs`, `lib.rs`, `tests.rs`, `runtime.rs`,
+  `views/import.rs`, `views/panels.rs`, `views/mod.rs`, `Cargo.toml`s, manual, AGENTS.md.
+- Verified: fmt, clippy, tests (parser + update flow); GUI: menu item, window, typed list
+  with a bad line → preview "2 hosts, 1 left out (line 3)", cancelled (nothing imported).
+  Not verified: "Paste from clipboard" button live (would read the user's clipboard).
+
 ## [2026-11-18] — fix(ui): Hosts menu as icon-only hamburger at the top right (#41)
 - Issue #41 addressed on GitHub.
 - `views/panels.rs`: the menu is an icon-only ☰ button (tooltip) placed in the top-right

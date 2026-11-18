@@ -3075,6 +3075,7 @@ dependencies = [
 name = "telepad-gui"
 version = "0.6.1"
 dependencies = [
+ "arboard",
  "eframe",
  "egui_extras",
  "rfd",

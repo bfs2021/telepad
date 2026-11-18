@@ -51,6 +51,7 @@ fn hosts_menu(ui: &mut egui::Ui, out: &mut Vec<Msg>) {
                 vec![
                     (icons::IMPORT, "Import from a file…", Msg::Import),
                     (icons::IMPORT, "Import ~/.ssh/config", Msg::ImportSshConfig),
+                    (icons::COPY, "Import from pasted text…", Msg::PasteImport),
                 ],
             ),
             ("Export", vec![(icons::EXPORT, "Export…", Msg::Export)]),
