@@ -2,6 +2,16 @@
 
 Newest first.
 
+## [2026-11-18] — Telepad 0.7.0
+- Faster refresh: live metrics every round, addresses / ports / updates every 6 h, OS and
+  hardware facts once a day, hosts without SSH only pinged (#36).
+- New: **Overview — Docker** page, containers of all hosts grouped by stack (#37).
+- Overview buttons clearly look like buttons in light and dark theme (#38).
+- Hosts menu is a ☰ button at the top right (#41).
+- New: **Import from pasted text…** (OpenSSH config, JSON, or one host per line) (#42).
+- New: drag hosts by their handle to reorder, in the host list and the table (#43).
+- Fix: Merge import adds new hosts at the end of the list (#45).
+
 ## [2026-11-18] — Tested and merged: #45
 - Windows 11 x86_64: fmt, clippy, 104 tests, release build; CI green on Windows, macOS, Linux (PR #46).
 - GUI on a throwaway database: Merge-pasting `golf01` (new) and `bravo` (existing) into a custom
