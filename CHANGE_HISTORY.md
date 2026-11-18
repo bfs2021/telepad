@@ -2,6 +2,12 @@
 
 Newest first.
 
+## [2026-11-18] — Tested and merged: #45
+- Windows 11 x86_64: fmt, clippy, 104 tests, release build; CI green on Windows, macOS, Linux (PR #46).
+- GUI on a throwaway database: Merge-pasting `golf01` (new) and `bravo` (existing) into a custom
+  order appended golf01 at the end; bravo kept its place with the new HostName;
+  `telepad.ssh_config` in the same order. Replace order covered by the unit test.
+
 ## [2026-11-18] — fix(store): Merge import appends new hosts at the end (#45)
 - Issue #45 addressed on GitHub.
 - `store.rs`: `Store::import` numbers new rows after `MAX(sort_order)`; updated hosts keep
