@@ -261,8 +261,9 @@ machine that is down looks different from one where only SSH is broken.
     A host needs at least a name or an address.
 
   Either way a preview comes first:
-  - **Merge — add new, update same alias, keep others**
-  - **Replace — hosts become exactly this list**
+  - **Merge — add new, update same alias, keep others**: new hosts are added at the
+    end of the list in imported order; updated hosts keep their place.
+  - **Replace — hosts become exactly this list**, in the order of the import.
 
   An import is all or nothing: if any host is invalid, nothing changes. Global
   `Host *` / `Match` blocks are imported too.

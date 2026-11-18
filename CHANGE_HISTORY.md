@@ -2,6 +2,19 @@
 
 Newest first.
 
+## [2026-11-18] — fix(store): Merge import appends new hosts at the end (#45)
+- Issue #45 addressed on GitHub.
+- `store.rs`: `Store::import` numbers new rows after `MAX(sort_order)`; updated hosts keep
+  their `sort_order`; Replace (table emptied first) keeps the import order. Test
+  `merge_import_appends_new_hosts_and_keeps_the_saved_order`.
+- `docs/USER_MANUAL.md`: Merge / Replace order.
+- Verified: fmt, clippy `-D warnings`, 104 tests. Not verified yet: GUI import (tester).
+
+## [2026-11-18] — fix(store): Merge import puts new hosts between existing ones
+- Issue #45 created on GitHub (found while testing PR #44; related to #42, #43)
+- Scope: telepad-core (`store.rs`, `Store::import`)
+- Labels: bug
+
 ## [2026-11-18] — Tested and merged: #41, #42, #43
 - Windows 11 x86_64: fmt, clippy `-D warnings`, 103 tests, release build pass; macOS / Linux
   via CI. Headless `telepad-check` unchanged (dockercenter collected, ccl clear error).
