@@ -9,7 +9,7 @@ How to use Telepad once it is [installed](../README.md#install). For a first run
 
 | Area | What it shows |
 |---|---|
-| **Top bar** | **☰ Hosts** menu, **Refresh all**, **Auto every _N_ s**, the search box, up/down/total counts, a spinner while hosts load, and an **Update X available** button when a new release exists |
+| **Top bar** | **Refresh all**, **Auto every _N_ s**, theme, the search box, up/down/total counts, a spinner while hosts load, an **Update X available** button when a new release exists, and at the top right the **☰** menu (add, import, export, software update) |
 | **Host list** (left) | The large **Overview — all hosts** and **Overview — Docker** buttons (the one for the page on screen is filled), the **View** switch, then every host (see [Host list](#host-list)) |
 | **Main area** | The overview table, or the detail page of the selected host |
 | **Status bar** (bottom) | Path of the database in use (hover: the generated ssh config), the Telepad version, and short messages |
@@ -215,7 +215,7 @@ up the others. The window stays responsive while hosts load.
 
 ## Adding, editing and removing hosts
 
-**☰ Hosts → Add one host…** opens the editor:
+**☰ → Add one host…** opens the editor:
 
 | Field | Meaning |
 |---|---|
@@ -240,8 +240,8 @@ machine that is down looks different from one where only SSH is broken.
 
 ## Import and export
 
-- **☰ Hosts → Import ~/.ssh/config** imports your own OpenSSH client config in one click.
-- **☰ Hosts → Import from a file…** reads any file you pick:
+- **☰ → Import ~/.ssh/config** imports your own OpenSSH client config in one click.
+- **☰ → Import from a file…** reads any file you pick:
   - an **OpenSSH client config** (any file that is not JSON);
   - **JSON** with a list of hosts: a Telepad export from any version, `{"hosts": [...]}`
     or a bare `[...]`. Common field names are understood, in any case and with or
@@ -256,7 +256,7 @@ machine that is down looks different from one where only SSH is broken.
 
   An import is all or nothing: if any host is invalid, nothing changes. Global
   `Host *` / `Match` blocks are imported too.
-- **☰ Hosts → Export…** writes `.json` (re-importable, keeps every field) or OpenSSH
+- **☰ → Export…** writes `.json` (re-importable, keeps every field) or OpenSSH
   config text. Hosts that are not monitored or RDP-only are marked with
   `# telepad: not monitored` / `# telepad: rdp only` comments so they round-trip.
 
@@ -290,7 +290,7 @@ share one internet address does not run into GitHub's API limit. If a check fail
 tried again after 30 minutes and the reason shows in **Software update…**.
 
 1. When a newer version exists, the top bar shows **Update X available**.
-2. Click it (or **☰ Hosts → Software update…**) to see the version and a link to the
+2. Click it (or **☰ → Software update…**) to see the version and a link to the
    release notes.
 3. **Update now** downloads the zip for your platform, verifies it against the release's
    `.sha256` and replaces `telepad.exe` and `telepad-check.exe`. If anything fails,

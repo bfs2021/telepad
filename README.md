@@ -35,7 +35,7 @@ Releases are built for Windows (x86_64), macOS (Apple silicon and Intel) and Lin
 
 Your hosts and settings live in `%APPDATA%\Telepad\telepad.db`, and uninstalling keeps
 them. To import an existing OpenSSH config on the first start, put it there as `config`, or
-use **☰ Hosts → Import ~/.ssh/config**.
+use **☰ → Import ~/.ssh/config**.
 
 ### Windows (portable zip)
 
@@ -72,7 +72,7 @@ choose **More info → Run anyway**.
 
 Hosts and settings live in `~/Library/Application Support/Telepad/telepad.db`; put an
 OpenSSH config there as `config` to import it on the first start, or use
-**☰ Hosts → Import ~/.ssh/config**. A portable zip (`telepad-<version>-macos-<arch>.zip`)
+**☰ → Import ~/.ssh/config**. A portable zip (`telepad-<version>-macos-<arch>.zip`)
 is also published; it keeps its data next to the program and needs the same `xattr` step
 for its folder.
 

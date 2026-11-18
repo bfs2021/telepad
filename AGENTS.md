@@ -149,7 +149,7 @@ in `update()` with a test → run the effect in `runtime.rs` → draw/emit it in
 | Fallback key for hosts without IdentityFile | `SSH_IDENTITY_FILE` in `.env` next to `config` |
 | ssh binary override | `TELEPAD_SSH` env var (default: Windows `System32\OpenSSH\ssh.exe`, else `ssh`) |
 | View settings | `settings` table `ui_compact_host_list` / `ui_group_by_status` (host list toggles) |
-| Update source | `settings` table `update_enabled` / `update_repo` / `update_auto_install` (☰ Hosts ▸ Software update…); check via the github.com `releases/latest` redirect (API only as fallback: 60 req/h per IP); default `yohannaftali/telepad` |
+| Update source | `settings` table `update_enabled` / `update_repo` / `update_auto_install` (☰ ▸ Software update…); check via the github.com `releases/latest` redirect (API only as fallback: 60 req/h per IP); default `yohannaftali/telepad` |
 
 `.env`, `config`, `telepad.db` and `telepad.ssh_config` are git-ignored: never commit an inventory.
 
@@ -195,3 +195,6 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #36 | perf(collector): tiered collection — live, 6-hourly, daily and ping-only checks | closed | 2026-11-18 |
 | #37 | feat(ui): Overview — Docker page grouping containers of all hosts by stack | closed | 2026-11-18 |
 | #38 | fix(ui): overview buttons look flat in light and dark themes | closed | 2026-11-18 |
+| #41 | fix(ui): Hosts menu as icon-only hamburger at the top right | ready-for-review | 2026-11-18 |
+| #42 | feat(import): import hosts from pasted plain text | open | 2026-11-18 |
+| #43 | feat(ui): reorder hosts by drag and drop in host list and overview table | open | 2026-11-18 |

@@ -2,6 +2,20 @@
 
 Newest first.
 
+## [2026-11-18] — fix(ui): Hosts menu as icon-only hamburger at the top right (#41)
+- Issue #41 addressed on GitHub.
+- `views/panels.rs`: the menu is an icon-only ☰ button (tooltip) placed in the top-right
+  corner as its own child UI; the rest of the top bar wraps in the width left of it.
+- Docs: README, manual (Window layout, every "☰ Hosts →" reference), AGENTS.md.
+- Verified: fmt, clippy, tests; release GUI at 2400 px (menu opens, all items) and 900 px
+  (menu stays top-right, bar wraps). Not verified: light theme (left to tester).
+
+## [2026-11-18] — Issues #41, #42, #43 created
+- #41 fix(ui): Hosts menu as icon-only hamburger at the top right — scope `telepad-gui`, label enhancement
+- #42 feat(import): import hosts from pasted plain text — scope core / app / gui, label enhancement, depends on #41
+- #43 feat(ui): reorder hosts by drag and drop in host list and overview table — scope core / app / gui, label enhancement
+  (`sort_order` already in the schema, no migration)
+
 ## [2026-11-18] — chore: project skills, #34 status
 - `.claude/skills/` (planner, coder, tester, reviewer, shared API notes) copied from the
   senopati project and adapted to Telepad (`telepad-check`, GitHub, `telepad.db`).
