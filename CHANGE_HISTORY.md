@@ -2,6 +2,17 @@
 
 Newest first.
 
+## [2026-11-18] — Tested and merged: #36, #37, #38 (PR #39)
+- Windows 11 x86_64: fmt, clippy `-D warnings`, 98 tests, release build pass; macOS / Linux
+  left to CI (no local targets).
+- Headless `telepad-check` on dockercenter, backup, nas72, ccl matches direct read-only ssh
+  (OS, kernel, cores, updates 5/1 and 314/76, reboot flag, 115 / 10 listeners, 85/85
+  containers); refused key and unreachable host reported clearly, whole run 10 s.
+- GUI after 3 automatic rounds: dockercenter updated 0 s ago, OS / CPU and
+  addresses / ports / updates kept from the read 2 min earlier; ccl only pinged (1.6 s,
+  "SSH is tried again when the host answers ping"); Docker overview and both overview
+  buttons checked in dark and light theme; usable at 900 px width.
+
 ## [2026-11-18] — feat(ui): Docker overview and overview buttons checked on real data (#37, #38)
 - Issues #37 and #38 addressed on GitHub (PR #39); status ready-for-review.
 - Release GUI against the real inventory: Docker page shows 68 stacks / 324 containers on
