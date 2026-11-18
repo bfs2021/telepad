@@ -196,6 +196,18 @@ impl Container {
     pub fn running(&self) -> bool {
         self.state == "running"
     }
+    /// Image name for narrow columns: without the `docker.io/` registry, and an
+    /// untagged image ID (`sha256:…`) cut to the 12 characters Docker shows.
+    pub fn short_image(&self) -> String {
+        if let Some(id) = self.image.strip_prefix("sha256:") {
+            return format!("{}…", id.chars().take(12).collect::<String>());
+        }
+        self.image
+            .strip_prefix("docker.io/")
+            .unwrap_or(&self.image)
+            .to_string()
+    }
+
     pub fn is_nginx(&self) -> bool {
         self.image.contains("nginx") || self.name.contains("nginx")
     }

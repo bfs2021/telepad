@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use telepad_core::collector::{self, Scope};
 use telepad_core::config::{Access, HostEntry, Inventory};
 use telepad_core::model::HostReport;
 use telepad_core::store::{self, ImportMode, ImportSummary, ThemePref, UiPrefs};
@@ -25,6 +26,8 @@ pub struct Model {
     pub ssh_config_path: Option<PathBuf>,
     pub hosts: Vec<HostState>,
     pub selected: Option<usize>,
+    /// Which overview shows while no host is selected.
+    pub overview: OverviewPage,
     pub last_refresh: Option<Instant>,
     /// Hosts queued or being collected right now (from the runtime).
     pub busy: usize,
@@ -89,6 +92,16 @@ impl Default for Drafts {
     }
 }
 
+/// The two overview pages under the host list's buttons.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum OverviewPage {
+    /// Every host as a table or cards.
+    #[default]
+    Hosts,
+    /// Every container of every host, grouped by stack.
+    Docker,
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct HostState {
     pub entry: HostEntry,
@@ -97,6 +110,14 @@ pub struct HostState {
     pub loading: bool,
     pub updated: Option<Instant>,
     pub elapsed: Option<Duration>,
+    /// Last successful read of hostname / OS / kernel / CPU model (daily).
+    pub static_at: Option<Instant>,
+    /// Last successful read of addresses, ports and updates (every 6 hours).
+    pub slow_at: Option<Instant>,
+    /// Last attempt found the host down without a ping reply: ping it first.
+    pub no_ping: bool,
+    /// Last time ssh was actually tried (not skipped by a failed ping).
+    pub ssh_at: Option<Instant>,
 }
 
 impl HostState {
@@ -104,6 +125,21 @@ impl HostState {
         Self {
             entry,
             ..Default::default()
+        }
+    }
+
+    /// What the next automatic collection needs from this host.
+    pub fn scope_at(&self, now: Instant) -> Scope {
+        if self.entry.access == Access::Rdp {
+            return Scope::FULL;
+        }
+        let due = |t: Option<Instant>, every: Duration| {
+            t.is_none_or(|t| now.saturating_duration_since(t) >= every)
+        };
+        Scope {
+            static_info: due(self.static_at, collector::STATIC_EVERY),
+            slow: due(self.slow_at, collector::SLOW_EVERY),
+            ping_first: self.no_ping && !due(self.ssh_at, collector::DOWN_SSH_RETRY),
         }
     }
 

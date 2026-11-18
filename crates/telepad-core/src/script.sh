@@ -1,8 +1,15 @@
 # Telepad remote collector. POSIX sh, read-only, BusyBox-friendly.
 # Every section prints a ===NAME=== marker; a missing tool leaves it empty.
+# The collector puts TP_STATIC= / TP_SLOW= lines in front: 1 runs that tier
+# (static: once a day; slow: every 6 hours), empty skips it. Live metrics always run.
 export LC_ALL=C
 PATH="$PATH:/usr/sbin:/sbin:/usr/local/bin"
+[ -n "${TP_STATIC+x}" ] || TP_STATIC=1
+[ -n "${TP_SLOW+x}" ] || TP_SLOW=1
 
+echo "===TELEPAD==="
+
+if [ -n "$TP_STATIC" ]; then
 echo "===HOSTNAME==="
 hostname 2>/dev/null || cat /proc/sys/kernel/hostname 2>/dev/null
 
@@ -17,15 +24,16 @@ uname -s 2>/dev/null
 uname -r 2>/dev/null
 uname -m 2>/dev/null
 
+echo "===CPUINFO==="
+grep -m1 -E '^(model name|Hardware|Processor|cpu model)' /proc/cpuinfo 2>/dev/null
+echo "cores: $(grep -c '^processor' /proc/cpuinfo 2>/dev/null)"
+fi
+
 echo "===UPTIME==="
 cat /proc/uptime 2>/dev/null
 
 echo "===LOADAVG==="
 cat /proc/loadavg 2>/dev/null
-
-echo "===CPUINFO==="
-grep -m1 -E '^(model name|Hardware|Processor|cpu model)' /proc/cpuinfo 2>/dev/null
-echo "cores: $(grep -c '^processor' /proc/cpuinfo 2>/dev/null)"
 
 echo "===STAT1==="
 grep '^cpu ' /proc/stat 2>/dev/null
@@ -38,13 +46,6 @@ grep -E '^(MemTotal|MemFree|MemAvailable|Buffers|Cached|SReclaimable|SwapTotal|S
 
 echo "===DF==="
 df -P -k 2>/dev/null
-
-echo "===IPADDR==="
-if command -v ip >/dev/null 2>&1; then
-  ip -o addr show 2>/dev/null
-elif command -v ifconfig >/dev/null 2>&1; then
-  ifconfig 2>/dev/null | awk '/^[a-zA-Z0-9]/{i=$1} /inet /{a=$2; sub("addr:","",a); print i, "inet", a}'
-fi
 
 echo "===THERMAL==="
 for z in /sys/class/thermal/thermal_zone*; do
@@ -82,6 +83,14 @@ if [ -c /dev/ipmi0 ] || [ -c /dev/ipmi/0 ] || [ -c /dev/ipmidev/0 ]; then
       sudo -n "$IPMI" sdr type "$t" 2>/dev/null
     done
   fi
+fi
+
+if [ -n "$TP_SLOW" ]; then
+echo "===IPADDR==="
+if command -v ip >/dev/null 2>&1; then
+  ip -o addr show 2>/dev/null
+elif command -v ifconfig >/dev/null 2>&1; then
+  ifconfig 2>/dev/null | awk '/^[a-zA-Z0-9]/{i=$1} /inet /{a=$2; sub("addr:","",a); print i, "inet", a}'
 fi
 
 echo "===LISTEN==="
@@ -129,6 +138,8 @@ elif command -v yum >/dev/null 2>&1; then
   echo "yum=$n;$sec"
 elif command -v apk >/dev/null 2>&1; then
   echo "apk=$($T apk -u list 2>/dev/null | grep -c .)"
+fi
+
 fi
 
 echo "===DOCKER==="

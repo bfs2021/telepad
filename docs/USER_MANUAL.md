@@ -10,7 +10,7 @@ How to use Telepad once it is [installed](../README.md#install). For a first run
 | Area | What it shows |
 |---|---|
 | **Top bar** | **☰ Hosts** menu, **Refresh all**, **Auto every _N_ s**, the search box, up/down/total counts, a spinner while hosts load, and an **Update X available** button when a new release exists |
-| **Host list** (left) | The large **Overview — all hosts** button, the **View** switch, then every host (see [Host list](#host-list)) |
+| **Host list** (left) | The large **Overview — all hosts** and **Overview — Docker** buttons (the one for the page on screen is filled), the **View** switch, then every host (see [Host list](#host-list)) |
 | **Main area** | The overview table, or the detail page of the selected host |
 | **Status bar** (bottom) | Path of the database in use (hover: the generated ssh config), the Telepad version, and short messages |
 
@@ -43,6 +43,17 @@ the next time Telepad starts.
 
 Click **Overview — all hosts** at the top of the host list to see every host at once. The
 **View** switch above the overview chooses **Table** or **Cards**; the choice is remembered.
+
+### Docker overview
+
+**Overview — Docker** (below **Overview — all hosts**) lists the containers of every host
+grouped by stack (the compose project name), stacks A–Z, then **Standalone containers**. A
+stack running on several hosts appears once; inside it, each host has its own line with a
+link to the host, how the stack is managed (docker compose folder or Portainer stack) and
+the same **Compose** menu / **Open in Portainer** button as on the host page. Each container
+shows image, status, container IPs and published ports, and its **☰** menu has the usual
+[Docker actions](#docker-actions). Click a stack name to fold it. The search box filters by
+stack, container, image or host.
 
 ### Table
 
@@ -104,6 +115,8 @@ of being cut off. Below that:
 - **Sensors**: temperatures and fan speeds. Fans spin faster in the drawing the faster
   they run. On a physical server whose BMC is not readable yet, **Set up BMC access…**
   appears (see [Fan speeds and BMC temperatures](#fan-speeds-and-bmc-temperatures-ipmi)).
+- Under the description: when the OS / CPU facts and the addresses / ports / updates were
+  last read (see [Refreshing](#refreshing)).
 - **Docker**: runtime version, management (for example a Portainer agent), compose
   stacks with their folder and file, and every container with image, state, container
   IP per network and published ports. See [Docker actions](#docker-actions).
@@ -180,7 +193,23 @@ capped (500 services, 1000 workloads per kind, 100 problem pods).
 
 All monitored hosts are checked at start, then every 60 s while **Auto every** is ticked
 (change the interval next to it, 15–3600 s). **Refresh all** checks every host now;
-**Refresh** on a host checks only that one. Up to 12 hosts are checked at the same time,
+**Refresh** on a host checks only that one.
+
+Not everything is read on every round. Automatic rounds read:
+
+| What | How often |
+|---|---|
+| Uptime, load, CPU, memory, disks, sensors, Docker, Swarm, Kubernetes | every round (**Auto every**) |
+| IP addresses, listening ports, pending updates, reboot needed | every 6 hours |
+| Hostname, OS release, kernel, architecture, CPU model | once a day |
+
+**Refresh** and **Refresh all**, a new or edited host and a host that has just rebooted
+(uptime went down) read everything. A host that is down and does not answer ping is only
+pinged on the following rounds (no ssh connection, no timeout to wait for); as soon as it
+answers ping everything is read again, and ssh is still tried every 10 minutes for hosts
+whose firewall drops ping. Remote Desktop hosts are always just ping + port check.
+
+Up to 12 hosts are checked at the same time,
 each with an 8 s connect timeout and a 40 s total timeout, so one slow host never holds
 up the others. The window stays responsive while hosts load.
 

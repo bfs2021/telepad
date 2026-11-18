@@ -82,6 +82,22 @@ pub fn detail(
         ))
         .weak(),
     );
+    if h.report.is_some() && h.entry.access == Access::Ssh {
+        ui.label(
+            RichText::new(format!(
+                "OS and CPU info read {} · addresses, ports and updates read {}",
+                ago(h.static_at),
+                ago(h.slow_at)
+            ))
+            .weak()
+            .small(),
+        )
+        .on_hover_text(
+            "Live metrics are read on every refresh; OS / CPU info once a day and \
+             addresses, listening ports and pending updates every 6 hours. \
+             Refresh reads everything now.",
+        );
+    }
     if let Some(e) = &h.error {
         ui.colored_label(usage_color(95.0), format!("Last check failed: {e}"));
     }
