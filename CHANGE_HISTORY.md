@@ -2,6 +2,17 @@
 
 Newest first.
 
+## [2026-11-18] — Tested and merged: #49
+- Windows 11 x86_64: fmt, clippy, 112 tests, release build; CI on Windows, macOS, Linux.
+- GUI on a throwaway database: invalid key error, fingerprint (= `ssh-keygen -lf`), select
+  all / indeterminate / filter, typed confirmation, Add and Revoke runs (unreachable hosts:
+  clear "connection timed out" per host), lockout guard refused revoking the login key
+  without starting ssh.
+- Real hosts `backup` and `dockercenter` (owner's OK, owner's key): Add → dockercenter
+  added / backup already present; Revoke → both removed, dockercenter file back to its
+  original SHA-256, mode 600 kept, no temp files left; Add again → key left on both, as asked.
+- Fixed while testing: window kept on screen with scrolling content; shorter refusal text.
+
 ## [2026-11-18] — feat(keys): add or revoke an SSH public key on selected servers (#49)
 - Issue #49 addressed on GitHub.
 - Core `authorized_keys.rs`: `PublicKey::parse` (type list, strict base64, embedded type,

@@ -204,4 +204,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #42 | feat(import): import hosts from pasted plain text | closed | 2026-11-18 |
 | #43 | feat(ui): reorder hosts by drag and drop in host list and overview table | closed | 2026-11-18 |
 | #45 | fix(store): Merge import puts new hosts between existing ones | closed | 2026-11-18 |
-| #49 | feat(keys): add or revoke an SSH public key on selected servers | ready-for-review | 2026-11-18 |
+| #49 | feat(keys): add or revoke an SSH public key on selected servers | closed | 2026-11-18 |

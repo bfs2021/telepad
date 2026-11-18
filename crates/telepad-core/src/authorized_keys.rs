@@ -275,9 +275,7 @@ pub fn apply(
             .into_iter()
             .find(|(_, k)| k.same_key(key))
     {
-        return KeyOutcome::Refused(format!(
-            "Telepad logs in with this key ({path}); revoking it would lock Telepad out"
-        ));
+        return KeyOutcome::Refused(format!("Telepad logs in with this key ({path})"));
     }
     match run_script(settings, host, &script(action, key)) {
         Ok((out, err, code)) => {
@@ -471,7 +469,7 @@ mod tests {
         // Refused before any ssh is started.
         assert!(matches!(
             apply(&s, &host, KeyAction::Revoke, &key),
-            KeyOutcome::Refused(why) if why.contains("lock Telepad out")
+            KeyOutcome::Refused(why) if why.contains("logs in with this key")
         ));
         std::fs::remove_dir_all(&dir).unwrap();
     }
