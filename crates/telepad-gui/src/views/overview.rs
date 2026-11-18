@@ -6,7 +6,8 @@
 use eframe::egui::{self, RichText};
 use egui_extras::{Column, TableBuilder, TableRow};
 use telepad_app::{
-    HostState, Model, Msg, Sort, SortKey, fullest_disk, host_flags, hottest, overview_rows,
+    HostState, Model, Msg, Sort, SortKey, can_reorder, fullest_disk, host_flags, hottest,
+    overview_rows,
 };
 use telepad_core::config::Access;
 use telepad_core::model::{HostReport, PortainerRole, human_kb};
@@ -18,7 +19,7 @@ const ROW_HEIGHT: f32 = 24.0;
 
 /// (title, sort key, initial width, minimum width)
 const COLUMNS: [(&str, Option<SortKey>, f32, f32); 13] = [
-    ("", Some(SortKey::Status), 18.0, 18.0),
+    ("", Some(SortKey::Status), 36.0, 36.0),
     ("Host", Some(SortKey::Host), 130.0, 60.0),
     ("Description", Some(SortKey::Description), 170.0, 40.0),
     ("Address", Some(SortKey::Address), 115.0, 50.0),
@@ -35,6 +36,8 @@ const COLUMNS: [(&str, Option<SortKey>, f32, f32); 13] = [
 
 pub fn overview(ui: &mut egui::Ui, m: &Model, filter: &str, sort: Sort, out: &mut Vec<Msg>) {
     let rows = overview_rows(m, filter, sort);
+    let reorder = can_reorder(filter, false, sort);
+    let accent = ui.visuals().selection.bg_fill;
     // The table scrolls vertically itself; this adds horizontal scrolling
     // when the columns are wider than the window.
     egui::ScrollArea::horizontal()
@@ -85,14 +88,22 @@ pub fn overview(ui: &mut egui::Ui, m: &Model, filter: &str, sort: Sort, out: &mu
                 .body(|body| {
                     body.rows(ROW_HEIGHT, rows.len(), |mut row| {
                         let i = rows[row.index()];
-                        host_row(&mut row, i, &m.hosts[i], out);
+                        host_row(&mut row, i, &m.hosts[i], reorder, out);
+                        if reorder {
+                            drop_target(&row.response(), i, accent, out);
+                        }
                     });
                 });
         });
 }
 
-fn host_row(row: &mut TableRow<'_, '_>, i: usize, h: &HostState, out: &mut Vec<Msg>) {
-    row.col(|ui| status_dot(ui, h));
+fn host_row(row: &mut TableRow<'_, '_>, i: usize, h: &HostState, grip: bool, out: &mut Vec<Msg>) {
+    row.col(|ui| {
+        if grip {
+            grip_handle(ui, i);
+        }
+        status_dot(ui, h);
+    });
     row.col(|ui| {
         if ui
             .add(egui::Link::new(RichText::new(&h.entry.alias).strong()))

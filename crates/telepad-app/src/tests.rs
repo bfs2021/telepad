@@ -688,6 +688,78 @@ fn pasted_text_goes_to_the_import_preview_with_skipped_lines() {
 }
 
 #[test]
+fn dragging_a_host_reorders_keeps_selection_and_saves_the_order() {
+    let t0 = Instant::now();
+    let (mut s, _) = started(t0);
+    loaded(
+        &mut s,
+        vec![host(1, "a"), host(2, "b"), host(3, "c"), host(4, "d")],
+        t0,
+    );
+    s.model.hosts[2].loading = true;
+    update(&mut s, Msg::Select(Some(2)), t0);
+    let names = |s: &State| -> Vec<String> {
+        s.model
+            .hosts
+            .iter()
+            .map(|h| h.entry.alias.clone())
+            .collect()
+    };
+
+    // c dropped on the upper half of a → first.
+    let fx = update(
+        &mut s,
+        Msg::MoveHost {
+            from: 2,
+            to: drop_index(2, 0, false),
+        },
+        t0,
+    );
+    assert_eq!(names(&s), ["c", "a", "b", "d"]);
+    assert!(matches!(&fx[..], [Effect::SaveOrder(ids)] if *ids == [3, 1, 2, 4]));
+    assert_eq!(s.model.selected, Some(0));
+    assert!(s.model.hosts[0].loading, "state moves with the host");
+
+    // a dropped on the lower half of d → last.
+    update(
+        &mut s,
+        Msg::MoveHost {
+            from: 1,
+            to: drop_index(1, 3, true),
+        },
+        t0,
+    );
+    assert_eq!(names(&s), ["c", "b", "d", "a"]);
+    assert_eq!(s.model.selected, Some(0));
+
+    // Out of range or onto itself: nothing.
+    assert!(update(&mut s, Msg::MoveHost { from: 9, to: 0 }, t0).is_empty());
+    assert!(update(&mut s, Msg::MoveHost { from: 1, to: 1 }, t0).is_empty());
+
+    // A failed save reloads the database order.
+    let fx = update(&mut s, Msg::OrderSaved(Err("disk full".into())), t0);
+    assert!(matches!(fx[..], [Effect::LoadHosts]));
+    assert!(s.model.message_at(t0).unwrap().contains("disk full"));
+}
+
+#[test]
+fn drop_index_and_when_reordering_is_offered() {
+    assert_eq!(drop_index(0, 2, false), 1);
+    assert_eq!(drop_index(0, 2, true), 2);
+    assert_eq!(drop_index(3, 0, false), 0);
+    assert_eq!(drop_index(3, 0, true), 1);
+    assert_eq!(drop_index(2, 2, true), 2);
+    assert!(can_reorder("", false, Sort::default()));
+    assert!(!can_reorder("web", false, Sort::default()));
+    assert!(!can_reorder("", true, Sort::default()));
+    let sorted = Sort {
+        key: Some(SortKey::Cpu),
+        descending: true,
+    };
+    assert!(!can_reorder("", false, sorted));
+}
+
+#[test]
 fn import_from_user_ssh_config_reads_it_without_a_dialog() {
     let mut s = State::default();
     let fx = update(&mut s, Msg::ImportSshConfig, Instant::now());

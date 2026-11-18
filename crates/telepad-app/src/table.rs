@@ -413,7 +413,6 @@ pub fn host_list_groups(
         .collect()
 }
 
-/// The highest of CPU, memory and fullest-disk usage, with its name.
 /// One stack in the Docker overview: every container with this compose project
 /// name, from every host. `name` is empty for containers outside any stack.
 #[derive(Debug, Clone)]
@@ -477,6 +476,20 @@ pub fn docker_stacks<'a>(m: &'a Model, filter: &str) -> Vec<StackRow<'a>> {
     rows
 }
 
+/// Where a dragged host ends up: dropped on the upper or lower half (`below`)
+/// of the row at `onto`, as an index into the list after it was taken out.
+pub fn drop_index(from: usize, onto: usize, below: bool) -> usize {
+    let before = onto + usize::from(below);
+    if from < before { before - 1 } else { before }
+}
+
+/// Dragging hosts is offered only in plain inventory order: no search, no
+/// grouping, no column sort (the position would be ambiguous otherwise).
+pub fn can_reorder(filter: &str, grouped: bool, sort: Sort) -> bool {
+    filter.trim().is_empty() && !grouped && sort.key.is_none()
+}
+
+/// The highest of CPU, memory and fullest-disk usage, with its name.
 pub fn worst_usage(r: &HostReport) -> Option<(&'static str, f32)> {
     [
         ("CPU", r.cpu_usage_pct),

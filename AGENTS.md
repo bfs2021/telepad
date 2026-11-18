@@ -63,7 +63,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 |---|---|
 | `src/state.rs` | `State { model: Model, drafts: Drafts }` (drafts include the overview `Sort`), `OverviewPage`, `HostState` (+ `scope_at`: which tiers are due), `Editor`, `ImportDialog`, `UpdateState`, `matches_filter` |
 | `src/msg.rs` | `Msg` (user intents + results of effects) and `Effect` (work for the runtime) |
-| `src/table.rs` | Overview order: `Sort`/`SortKey`, `overview_rows` (filter + stable sort); `docker_stacks` (Docker overview by stack); host list `host_list_groups`, `worst_usage`; `fullest_disk`, `hottest` |
+| `src/table.rs` | Overview order: `Sort`/`SortKey`, `overview_rows` (filter + stable sort); `drop_index` / `can_reorder` (drag to reorder); `docker_stacks` (Docker overview by stack); host list `host_list_groups`, `worst_usage`; `fullest_disk`, `hottest` |
 | `src/update.rs` | `update(&mut State, Msg, now) -> Vec<Effect>` — the only place the model changes |
 | `src/tests.rs` | Behaviour tests for `update()` (no GUI, no database, no network) |
 
@@ -197,4 +197,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #38 | fix(ui): overview buttons look flat in light and dark themes | closed | 2026-11-18 |
 | #41 | fix(ui): Hosts menu as icon-only hamburger at the top right | ready-for-review | 2026-11-18 |
 | #42 | feat(import): import hosts from pasted plain text | ready-for-review | 2026-11-18 |
-| #43 | feat(ui): reorder hosts by drag and drop in host list and overview table | open | 2026-11-18 |
+| #43 | feat(ui): reorder hosts by drag and drop in host list and overview table | ready-for-review | 2026-11-18 |

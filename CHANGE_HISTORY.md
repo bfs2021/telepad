@@ -2,6 +2,23 @@
 
 Newest first.
 
+## [2026-11-18] — feat(ui): reorder hosts by drag and drop (#43)
+- Issue #43 addressed on GitHub.
+- `store.rs`: `save_order` (one transaction; `sort_order` already in the schema).
+- App: `Msg::MoveHost` / `OrderSaved`, `Effect::SaveOrder`; `drop_index`, `can_reorder`;
+  selection and host state move with the host; a failed save reloads the database order.
+- GUI: ⋮⋮ grip (`widgets::grip_handle`) as drag source, drop line + release on each row
+  (`widgets::drop_target`) in the host list and the overview table; hidden with a hint while
+  searching, grouping or sorting. Also moved a doc comment that #37 had detached from
+  `worst_usage`.
+- Files: `store.rs`, `msg.rs`, `table.rs`, `update.rs`, `lib.rs`, `tests.rs`, `runtime.rs`,
+  `widgets.rs`, `icons.rs`, `views/panels.rs`, `views/overview.rs`, `views/mod.rs`, manual,
+  AGENTS.md.
+- Verified: fmt, clippy, tests; GUI on a throwaway database (4 made-up hosts): drag in the
+  side bar and in the table, order kept after restart, generated ssh config in the new
+  order, handles hidden with hints while searching. Not verified: on the real inventory
+  (would change its saved order).
+
 ## [2026-11-18] — feat(import): import hosts from pasted plain text (#42)
 - Issue #42 addressed on GitHub.
 - `store.rs`: `parse_pasted` — JSON / OpenSSH config text via `parse_import`, otherwise

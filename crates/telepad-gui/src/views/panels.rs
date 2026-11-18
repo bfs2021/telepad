@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use eframe::egui::{self, RichText};
 use telepad_app::{
-    Drafts, HostState, Model, Msg, OverviewPage, UpdatePhase, fullest_disk, host_flags,
-    host_list_groups, worst_usage,
+    Drafts, HostState, Model, Msg, OverviewPage, Sort, UpdatePhase, can_reorder, fullest_disk,
+    host_flags, host_list_groups, worst_usage,
 };
 use telepad_core::update::CURRENT_VERSION;
 
@@ -237,6 +237,18 @@ pub fn host_list(ui: &mut egui::Ui, m: &Model, d: &Drafts, out: &mut Vec<Msg>) {
             out.push(Msg::SetGroupByStatus(group));
         }
     });
+    let reorder = can_reorder(&d.filter, d.group_by_status, Sort::default());
+    if !reorder && m.hosts.len() > 1 {
+        ui.label(
+            RichText::new(format!(
+                "{} Clear the search and grouping to reorder hosts",
+                icons::GRIP
+            ))
+            .weak()
+            .small(),
+        );
+    }
+    let accent = ui.visuals().selection.bg_fill;
     ui.separator();
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
@@ -245,10 +257,17 @@ pub fn host_list(ui: &mut egui::Ui, m: &Model, d: &Drafts, out: &mut Vec<Msg>) {
                 let mut draw = |ui: &mut egui::Ui| {
                     for &i in &rows {
                         let h = &m.hosts[i];
-                        if d.compact_host_list {
-                            compact_row(ui, m, i, h, out);
-                        } else {
-                            detailed_row(ui, m, i, h, out);
+                        let row = ui
+                            .scope(|ui| {
+                                if d.compact_host_list {
+                                    compact_row(ui, m, i, h, reorder, out);
+                                } else {
+                                    detailed_row(ui, m, i, h, reorder, out);
+                                }
+                            })
+                            .response;
+                        if reorder {
+                            drop_target(&row, i, accent, out);
                         }
                     }
                 };
@@ -273,9 +292,13 @@ fn name_row(
     m: &Model,
     i: usize,
     h: &HostState,
+    grip: bool,
     extra: impl FnOnce(&mut egui::Ui),
 ) -> egui::Response {
     ui.horizontal(|ui| {
+        if grip {
+            grip_handle(ui, i);
+        }
         status_dot(ui, h);
         let mut name = RichText::new(&h.entry.alias).strong();
         if h.entry.unmonitored {
@@ -313,8 +336,15 @@ fn row_actions(resp: &egui::Response, i: usize, out: &mut Vec<Msg>) {
 
 /// One line: status, logo, alias, and on the right the worst of CPU / RAM /
 /// disk (or a warning sign for an error). Details on hover.
-fn compact_row(ui: &mut egui::Ui, m: &Model, i: usize, h: &HostState, out: &mut Vec<Msg>) {
-    let resp = name_row(ui, m, i, h, |ui| {
+fn compact_row(
+    ui: &mut egui::Ui,
+    m: &Model,
+    i: usize,
+    h: &HostState,
+    grip: bool,
+    out: &mut Vec<Msg>,
+) {
+    let resp = name_row(ui, m, i, h, grip, |ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if let Some(r) = &h.report {
                 if let Some((what, pct)) = worst_usage(r) {
@@ -360,8 +390,15 @@ fn compact_row(ui: &mut egui::Ui, m: &Model, i: usize, h: &HostState, out: &mut 
 }
 
 /// The original three-line row: name + address, description, CPU / RAM / disk bars (or the error).
-fn detailed_row(ui: &mut egui::Ui, m: &Model, i: usize, h: &HostState, out: &mut Vec<Msg>) {
-    let resp = name_row(ui, m, i, h, |ui| {
+fn detailed_row(
+    ui: &mut egui::Ui,
+    m: &Model,
+    i: usize,
+    h: &HostState,
+    grip: bool,
+    out: &mut Vec<Msg>,
+) {
+    let resp = name_row(ui, m, i, h, grip, |ui| {
         ui.label(RichText::new(&h.entry.hostname).weak().small());
     });
     row_actions(&resp, i, out);

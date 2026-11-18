@@ -39,6 +39,12 @@ Tick **Group by status** to split the list into **Down**, **Up** and **Not check
 right-click for Edit / Clone / Delete. Both choices are saved in `telepad.db` and come back
 the next time Telepad starts.
 
+**Reorder hosts:** drag a host by its **⋮⋮** handle (left of the status dot) and drop it on
+the upper or lower half of another host; a line shows where it will land. The order is
+saved in `telepad.db` at once, used by the list, the table, cards and the generated ssh
+config, and kept after a restart. The handles are hidden while the search box has text or
+**Group by status** is ticked (a hint says so), because the position would be ambiguous.
+
 ## Overview
 
 Click **Overview — all hosts** at the top of the host list to see every host at once. The
@@ -61,6 +67,10 @@ One row per host: **Host**, **Description**, **Address**, **OS**, **Flags**, **C
 **Fullest disk**, **Temp** (hottest sensor), **Docker** (running/total containers) and
 **Updated** (age of the data). Click a host name to open its detail page; the button at
 the end of a row opens SSH/RDP.
+
+In inventory order (no column sorted, no search) each row has a **⋮⋮** handle in the first
+column: drag it to reorder hosts, as in the host list. While a column is sorted or the
+search box has text, the handles are hidden and a hint above the table says what to clear.
 
 - **Sort:** click a column header. Numbers start with the highest (busiest CPU, fullest
   disk, hottest, most containers, most recently updated), text columns from A to Z; the

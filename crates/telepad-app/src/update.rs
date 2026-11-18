@@ -239,6 +239,24 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
             }
         }
         Msg::Select(i) => m.selected = i.filter(|&i| i < m.hosts.len()),
+        Msg::MoveHost { from, to } => {
+            if from != to && from < m.hosts.len() && to < m.hosts.len() {
+                let selected = selected_id(m);
+                let h = m.hosts.remove(from);
+                m.hosts.insert(to, h);
+                m.selected =
+                    selected.and_then(|id| m.hosts.iter().position(|h| h.entry.id == Some(id)));
+                fx.push(Effect::SaveOrder(
+                    m.hosts.iter().filter_map(|h| h.entry.id).collect(),
+                ));
+            }
+        }
+        Msg::OrderSaved(Ok(())) => {}
+        Msg::OrderSaved(Err(e)) => {
+            say(m, now, format!("Cannot save the host order: {e}"));
+            // Back to the order in the database; results are kept by host id.
+            fx.push(Effect::LoadHosts);
+        }
         Msg::ShowOverview(page) => {
             m.selected = None;
             m.overview = page;

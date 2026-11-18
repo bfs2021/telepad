@@ -101,6 +101,22 @@ fn overview_toolbar(ui: &mut egui::Ui, d: &Drafts, out: &mut Vec<Msg>) {
             out.push(Msg::SetOverviewCards(true));
         }
         if !d.overview_cards {
+            let why = match (d.filter.trim().is_empty(), d.sort.key.is_none()) {
+                (true, true) => None,
+                (false, true) => Some("clear the search"),
+                (true, false) => Some("click the sorted header until its arrow is gone"),
+                (false, false) => {
+                    Some("clear the search and click the sorted header until its arrow is gone")
+                }
+            };
+            if let Some(why) = why {
+                ui.separator();
+                ui.label(
+                    egui::RichText::new(format!("{} To reorder hosts, {why}", icons::GRIP))
+                        .weak()
+                        .small(),
+                );
+            }
             return;
         }
         ui.separator();

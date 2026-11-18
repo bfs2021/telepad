@@ -145,6 +145,11 @@ impl Runtime {
                     .pick_file()?;
                 Some(read_import(path))
             }
+            Effect::SaveOrder(ids) => {
+                let ws = self.ws.as_mut()?;
+                let saved = ws.store.save_order(&ids).map_err(|e| e.to_string());
+                Some(Msg::OrderSaved(saved.and_then(|()| ws.sync_ssh_config())))
+            }
             Effect::ReadClipboard => Some(Msg::ClipboardRead(
                 arboard::Clipboard::new()
                     .and_then(|mut c| c.get_text())

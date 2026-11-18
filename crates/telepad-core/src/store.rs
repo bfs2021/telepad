@@ -380,6 +380,19 @@ impl Store {
         }
     }
 
+    /// Store the display order: `ids` first to last, in one transaction.
+    pub fn save_order(&mut self, ids: &[i64]) -> Result<(), StoreError> {
+        let tx = self.conn.transaction()?;
+        for (i, id) in ids.iter().enumerate() {
+            tx.execute(
+                "UPDATE hosts SET sort_order = ?1 WHERE id = ?2",
+                params![i as i64 + 1, id],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn delete_host(&self, id: i64) -> Result<(), StoreError> {
         self.conn
             .execute("DELETE FROM hosts WHERE id = ?1", params![id])?;
@@ -816,6 +829,20 @@ mod tests {
         assert_eq!(r.removed, 2);
         assert_eq!(s.hosts().unwrap().len(), 1);
         assert_eq!(s.global().unwrap(), "");
+    }
+
+    #[test]
+    fn saved_order_is_the_order_hosts_are_read_in() {
+        let mut s = mem();
+        let ids: Vec<i64> = ["a", "b", "c"]
+            .iter()
+            .map(|a| s.save_host(&HostEntry::new(a)).unwrap())
+            .collect();
+        s.save_order(&[ids[2], ids[0], ids[1]]).unwrap();
+        let order: Vec<String> = s.hosts().unwrap().into_iter().map(|h| h.alias).collect();
+        assert_eq!(order, ["c", "a", "b"]);
+        let cfg = config::to_ssh_config(&s.inventory().unwrap());
+        assert!(cfg.find("Host c").unwrap() < cfg.find("Host a").unwrap());
     }
 
     #[test]
