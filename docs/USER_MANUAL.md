@@ -9,7 +9,7 @@ How to use Telepad once it is [installed](../README.md#install). For a first run
 
 | Area | What it shows |
 |---|---|
-| **Top bar** | **☰ Hosts** menu, **Refresh all**, **Auto every _N_ s**, the search box, up/down/total counts, a spinner while hosts load, and an **Update X available** button when a new release exists |
+| **Top bar** | **Refresh all**, **Auto every _N_ s**, theme, the search box, up/down/total counts, a spinner while hosts load, an **Update X available** button when a new release exists, and at the top right the **☰** menu (add, import, export, software update) |
 | **Host list** (left) | The large **Overview — all hosts** and **Overview — Docker** buttons (the one for the page on screen is filled), the **View** switch, then every host (see [Host list](#host-list)) |
 | **Main area** | The overview table, or the detail page of the selected host |
 | **Status bar** (bottom) | Path of the database in use (hover: the generated ssh config), the Telepad version, and short messages |
@@ -39,6 +39,12 @@ Tick **Group by status** to split the list into **Down**, **Up** and **Not check
 right-click for Edit / Clone / Delete. Both choices are saved in `telepad.db` and come back
 the next time Telepad starts.
 
+**Reorder hosts:** drag a host by its **⋮⋮** handle (left of the status dot) and drop it on
+the upper or lower half of another host; a line shows where it will land. The order is
+saved in `telepad.db` at once, used by the list, the table, cards and the generated ssh
+config, and kept after a restart. The handles are hidden while the search box has text or
+**Group by status** is ticked (a hint says so), because the position would be ambiguous.
+
 ## Overview
 
 Click **Overview — all hosts** at the top of the host list to see every host at once. The
@@ -61,6 +67,10 @@ One row per host: **Host**, **Description**, **Address**, **OS**, **Flags**, **C
 **Fullest disk**, **Temp** (hottest sensor), **Docker** (running/total containers) and
 **Updated** (age of the data). Click a host name to open its detail page; the button at
 the end of a row opens SSH/RDP.
+
+In inventory order (no column sorted, no search) each row has a **⋮⋮** handle in the first
+column: drag it to reorder hosts, as in the host list. While a column is sorted or the
+search box has text, the handles are hidden and a hint above the table says what to clear.
 
 - **Sort:** click a column header. Numbers start with the highest (busiest CPU, fullest
   disk, hottest, most containers, most recently updated), text columns from A to Z; the
@@ -215,7 +225,7 @@ up the others. The window stays responsive while hosts load.
 
 ## Adding, editing and removing hosts
 
-**☰ Hosts → Add one host…** opens the editor:
+**☰ → Add one host…** opens the editor:
 
 | Field | Meaning |
 |---|---|
@@ -240,8 +250,8 @@ machine that is down looks different from one where only SSH is broken.
 
 ## Import and export
 
-- **☰ Hosts → Import ~/.ssh/config** imports your own OpenSSH client config in one click.
-- **☰ Hosts → Import from a file…** reads any file you pick:
+- **☰ → Import ~/.ssh/config** imports your own OpenSSH client config in one click.
+- **☰ → Import from a file…** reads any file you pick:
   - an **OpenSSH client config** (any file that is not JSON);
   - **JSON** with a list of hosts: a Telepad export from any version, `{"hosts": [...]}`
     or a bare `[...]`. Common field names are understood, in any case and with or
@@ -252,11 +262,26 @@ machine that is down looks different from one where only SSH is broken.
 
   Either way a preview comes first:
   - **Merge — add new, update same alias, keep others**
-  - **Replace — hosts become exactly this file**
+  - **Replace — hosts become exactly this list**
 
   An import is all or nothing: if any host is invalid, nothing changes. Global
   `Host *` / `Match` blocks are imported too.
-- **☰ Hosts → Export…** writes `.json` (re-importable, keeps every field) or OpenSSH
+- **☰ → Import from pasted text…** opens a text box: paste with Ctrl+V or
+  **Paste from clipboard**, then **Next: preview**. It reads OpenSSH config text
+  (`Host` blocks) or JSON as above, or a simple list with one host per line:
+
+  ```
+  web01 admin@192.0.2.10
+  nas01 192.0.2.20:2222
+  198.51.100.7
+  ```
+
+  that is `[alias] [user@]host[:port]` (without an alias the address becomes the
+  alias; port 22 when none is given). Blank lines and `#` comments are skipped.
+  Lines that cannot be read and invalid hosts are left out and listed with their
+  line number in the preview; the other hosts can still be imported. If nothing
+  can be read, the window stays open and says why.
+- **☰ → Export…** writes `.json` (re-importable, keeps every field) or OpenSSH
   config text. Hosts that are not monitored or RDP-only are marked with
   `# telepad: not monitored` / `# telepad: rdp only` comments so they round-trip.
 
@@ -290,7 +315,7 @@ share one internet address does not run into GitHub's API limit. If a check fail
 tried again after 30 minutes and the reason shows in **Software update…**.
 
 1. When a newer version exists, the top bar shows **Update X available**.
-2. Click it (or **☰ Hosts → Software update…**) to see the version and a link to the
+2. Click it (or **☰ → Software update…**) to see the version and a link to the
    release notes.
 3. **Update now** downloads the zip for your platform, verifies it against the release's
    `.sha256` and replaces `telepad.exe` and `telepad-check.exe`. If anything fails,

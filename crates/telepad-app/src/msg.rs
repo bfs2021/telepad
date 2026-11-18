@@ -81,6 +81,11 @@ pub enum Msg {
         action: WorkloadAction,
     },
     Select(Option<usize>),
+    /// Host dragged from index `from` to index `to` (in the list after removal).
+    MoveHost {
+        from: usize,
+        to: usize,
+    },
     /// Host list buttons: "Overview — all hosts" / "Overview — Docker".
     ShowOverview(crate::state::OverviewPage),
     SelectAlias(String),
@@ -109,6 +114,12 @@ pub enum Msg {
     Import,
     /// Import the user's own `~/.ssh/config` without a file dialog.
     ImportSshConfig,
+    /// "Import from pasted text…" window.
+    PasteImport,
+    PasteFromClipboard,
+    /// Read the pasted text and go to the import preview.
+    PasteApply,
+    PasteCancel,
     ImportMode(ImportMode),
     ImportApply,
     ImportCancel,
@@ -151,7 +162,9 @@ pub enum Msg {
     UpdateInstalled(Result<String, String>),
     UpdateSettingsSaved(Result<UpdateConfig, String>),
     UiPrefsSaved(Result<(), String>),
+    OrderSaved(Result<(), String>),
     RunInfoLoaded(RunInfo),
+    ClipboardRead(Result<String, String>),
     /// Text for the status bar (e.g. from opening a terminal).
     Notice(String),
 }
@@ -193,6 +206,8 @@ pub enum Effect {
     PickKeyFile(String),
     /// List private keys in `~/.ssh` → [`Msg::KeysFound`].
     FindKeys,
+    /// Text on the clipboard → [`Msg::ClipboardRead`].
+    ReadClipboard,
     /// The following four report with [`Msg::Notice`].
     OpenSsh(HostEntry),
     OpenRdp(HostEntry),
@@ -206,6 +221,9 @@ pub enum Effect {
     SaveUpdateConfig(UpdateConfig),
     /// → [`Msg::UiPrefsSaved`]
     SaveUiPrefs(UiPrefs),
+    /// Host ids in display order; saved in one transaction, ssh config
+    /// regenerated → [`Msg::OrderSaved`].
+    SaveOrder(Vec<i64>),
     /// Errors come back as [`Msg::Notice`].
     /// Terminal on the host that shows the command and runs it after Enter.
     OpenDockerAction(HostEntry, Plan),

@@ -76,6 +76,7 @@ pub fn draw(root: &mut egui::Ui, m: &Model, d: &mut Drafts, now: Instant) -> Vec
 
     editor::editor_window(&ctx, d, &mut out);
     import::import_window(&ctx, m, &mut out);
+    import::paste_window(&ctx, d, &mut out);
     run_info::run_info_window(&ctx, d, &mut out);
     confirm::delete_confirm(&ctx, m, &mut out);
     update_window::update_window(&ctx, m, d, &mut out);
@@ -100,6 +101,22 @@ fn overview_toolbar(ui: &mut egui::Ui, d: &Drafts, out: &mut Vec<Msg>) {
             out.push(Msg::SetOverviewCards(true));
         }
         if !d.overview_cards {
+            let why = match (d.filter.trim().is_empty(), d.sort.key.is_none()) {
+                (true, true) => None,
+                (false, true) => Some("clear the search"),
+                (true, false) => Some("click the sorted header until its arrow is gone"),
+                (false, false) => {
+                    Some("clear the search and click the sorted header until its arrow is gone")
+                }
+            };
+            if let Some(why) = why {
+                ui.separator();
+                ui.label(
+                    egui::RichText::new(format!("{} To reorder hosts, {why}", icons::GRIP))
+                        .weak()
+                        .small(),
+                );
+            }
             return;
         }
         ui.separator();

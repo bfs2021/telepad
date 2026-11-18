@@ -63,6 +63,15 @@ pub struct Drafts {
     pub theme: ThemePref,
     /// "How it runs" window.
     pub run_info: Option<RunInfoView>,
+    /// "Import from pasted text" window.
+    pub paste: Option<PasteImport>,
+}
+
+/// Text the user pastes, and why parts of it could not be read.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PasteImport {
+    pub text: String,
+    pub problems: Vec<String>,
 }
 
 /// The "How it runs" window: waiting for the host, or the result.
@@ -88,6 +97,7 @@ impl Default for Drafts {
             overview_cards: false,
             theme: ThemePref::System,
             run_info: None,
+            paste: None,
         }
     }
 }
@@ -242,6 +252,8 @@ pub struct ImportDialog {
     pub inventory: Inventory,
     pub mode: ImportMode,
     pub preview: Result<ImportSummary, String>,
+    /// Pasted lines or hosts left out (shown in the preview).
+    pub skipped: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

@@ -2,6 +2,62 @@
 
 Newest first.
 
+## [2026-11-18] — Tested and merged: #41, #42, #43
+- Windows 11 x86_64: fmt, clippy `-D warnings`, 103 tests, release build pass; macOS / Linux
+  via CI. Headless `telepad-check` unchanged (dockercenter collected, ccl clear error).
+- GUI on a throwaway database (made-up hosts, documentation IPs):
+  - #41: ☰ at the top right in dark and light theme, all menu items; bar wraps at 900 px.
+  - #42: "Paste from clipboard" (test text put on the clipboard with the owner's OK),
+    CRLF lines read, preview 2 added, import → User / Port in the generated ssh config.
+  - #43: drag in host list and table, order kept after restart and in the ssh config,
+    handles hidden with hints while searching.
+- Found while testing (pre-existing, filed separately): Merge import gives new hosts
+  `sort_order` 1, 2, … so they land between existing hosts instead of at the end.
+
+## [2026-11-18] — feat(ui): reorder hosts by drag and drop (#43)
+- Issue #43 addressed on GitHub.
+- `store.rs`: `save_order` (one transaction; `sort_order` already in the schema).
+- App: `Msg::MoveHost` / `OrderSaved`, `Effect::SaveOrder`; `drop_index`, `can_reorder`;
+  selection and host state move with the host; a failed save reloads the database order.
+- GUI: ⋮⋮ grip (`widgets::grip_handle`) as drag source, drop line + release on each row
+  (`widgets::drop_target`) in the host list and the overview table; hidden with a hint while
+  searching, grouping or sorting. Also moved a doc comment that #37 had detached from
+  `worst_usage`.
+- Files: `store.rs`, `msg.rs`, `table.rs`, `update.rs`, `lib.rs`, `tests.rs`, `runtime.rs`,
+  `widgets.rs`, `icons.rs`, `views/panels.rs`, `views/overview.rs`, `views/mod.rs`, manual,
+  AGENTS.md.
+- Verified: fmt, clippy, tests; GUI on a throwaway database (4 made-up hosts): drag in the
+  side bar and in the table, order kept after restart, generated ssh config in the new
+  order, handles hidden with hints while searching. Not verified: on the real inventory
+  (would change its saved order).
+
+## [2026-11-18] — feat(import): import hosts from pasted plain text (#42)
+- Issue #42 addressed on GitHub.
+- `store.rs`: `parse_pasted` — JSON / OpenSSH config text via `parse_import`, otherwise
+  `[alias] [user@]host[:port]` per line; unreadable lines and invalid hosts are listed.
+- App: `Msg::PasteImport/PasteFromClipboard/ClipboardRead/PasteApply/PasteCancel`,
+  `Effect::ReadClipboard`, `Drafts::paste`, `ImportDialog::skipped`; GUI paste window,
+  menu item, skipped lines in the preview; `arboard` (already in the lock file via eframe).
+- Files: `store.rs`, `msg.rs`, `state.rs`, `update.rs`, `lib.rs`, `tests.rs`, `runtime.rs`,
+  `views/import.rs`, `views/panels.rs`, `views/mod.rs`, `Cargo.toml`s, manual, AGENTS.md.
+- Verified: fmt, clippy, tests (parser + update flow); GUI: menu item, window, typed list
+  with a bad line → preview "2 hosts, 1 left out (line 3)", cancelled (nothing imported).
+  Not verified: "Paste from clipboard" button live (would read the user's clipboard).
+
+## [2026-11-18] — fix(ui): Hosts menu as icon-only hamburger at the top right (#41)
+- Issue #41 addressed on GitHub.
+- `views/panels.rs`: the menu is an icon-only ☰ button (tooltip) placed in the top-right
+  corner as its own child UI; the rest of the top bar wraps in the width left of it.
+- Docs: README, manual (Window layout, every "☰ Hosts →" reference), AGENTS.md.
+- Verified: fmt, clippy, tests; release GUI at 2400 px (menu opens, all items) and 900 px
+  (menu stays top-right, bar wraps). Not verified: light theme (left to tester).
+
+## [2026-11-18] — Issues #41, #42, #43 created
+- #41 fix(ui): Hosts menu as icon-only hamburger at the top right — scope `telepad-gui`, label enhancement
+- #42 feat(import): import hosts from pasted plain text — scope core / app / gui, label enhancement, depends on #41
+- #43 feat(ui): reorder hosts by drag and drop in host list and overview table — scope core / app / gui, label enhancement
+  (`sort_order` already in the schema, no migration)
+
 ## [2026-11-18] — chore: project skills, #34 status
 - `.claude/skills/` (planner, coder, tester, reviewer, shared API notes) copied from the
   senopati project and adapted to Telepad (`telepad-check`, GitHub, `telepad.db`).

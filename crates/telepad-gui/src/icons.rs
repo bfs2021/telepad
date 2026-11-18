@@ -16,6 +16,8 @@ pub const REFRESH: &str = "\u{e094}";
 pub const IMPORT: &str = "\u{e20c}";
 pub const EXPORT: &str = "\u{e4c0}";
 pub const MENU: &str = "\u{e2f0}";
+/// dots-six-vertical: drag handle.
+pub const GRIP: &str = "\u{eae2}";
 pub const SEARCH: &str = "\u{e30c}";
 pub const CONTAINER: &str = "\u{e1da}";
 pub const STACK: &str = "\u{e466}";
@@ -357,6 +359,7 @@ mod tests {
             IMPORT,
             EXPORT,
             MENU,
+            GRIP,
             SEARCH,
             CONTAINER,
             STACK,

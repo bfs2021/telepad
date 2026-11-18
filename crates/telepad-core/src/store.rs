@@ -380,6 +380,19 @@ impl Store {
         }
     }
 
+    /// Store the display order: `ids` first to last, in one transaction.
+    pub fn save_order(&mut self, ids: &[i64]) -> Result<(), StoreError> {
+        let tx = self.conn.transaction()?;
+        for (i, id) in ids.iter().enumerate() {
+            tx.execute(
+                "UPDATE hosts SET sort_order = ?1 WHERE id = ?2",
+                params![i as i64 + 1, id],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn delete_host(&self, id: i64) -> Result<(), StoreError> {
         self.conn
             .execute("DELETE FROM hosts WHERE id = ?1", params![id])?;
@@ -516,6 +529,85 @@ pub fn parse_import(text: &str) -> Result<Inventory, StoreError> {
     } else {
         Ok(config::parse_inventory(t))
     }
+}
+
+/// Hosts pasted as text. JSON and OpenSSH config text (anything with a `Host`
+/// line) are read as by [`parse_import`]; otherwise one host per line,
+/// `[alias] [user@]host[:port]`, with blank lines and `#` comments ignored.
+/// Unreadable lines and invalid hosts are left out and described in the
+/// returned list, so the valid ones can still be imported.
+pub fn parse_pasted(text: &str) -> (Inventory, Vec<String>) {
+    let t = text.trim_start_matches('\u{feff}').trim();
+    let has_host_block = t.lines().any(|l| {
+        let mut w = l.split_whitespace();
+        w.next().is_some_and(|k| k.eq_ignore_ascii_case("host")) && w.next().is_some()
+    });
+    let (mut inv, mut problems) = if t.starts_with('{') || t.starts_with('[') || has_host_block {
+        match parse_import(t) {
+            Ok(inv) => (inv, Vec::new()),
+            Err(e) => (Inventory::default(), vec![e.to_string()]),
+        }
+    } else {
+        parse_host_lines(t)
+    };
+    inv.hosts.retain(|h| match h.validate() {
+        Ok(()) => true,
+        Err(e) => {
+            problems.push(format!("{}: {e}", h.alias));
+            false
+        }
+    });
+    (inv, problems)
+}
+
+/// `[alias] [user@]host[:port]` per line.
+fn parse_host_lines(t: &str) -> (Inventory, Vec<String>) {
+    let mut inv = Inventory::default();
+    let mut problems = Vec::new();
+    for (n, line) in t.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let n = n + 1;
+        let words: Vec<&str> = line.split_whitespace().collect();
+        let (alias, target) = match words.as_slice() {
+            [target] => (None, *target),
+            [alias, target] => (Some(*alias), *target),
+            _ => {
+                problems.push(format!("line {n}: expected `[alias] [user@]host[:port]`"));
+                continue;
+            }
+        };
+        let (user, rest) = target.rsplit_once('@').unwrap_or(("", target));
+        let (host, port) = match rest.rsplit_once(':') {
+            // One colon only: `host:port` (an IPv6 address has several).
+            Some((h, p)) if !h.contains(':') => match p.parse::<u16>() {
+                Ok(p) if p > 0 => (h, p),
+                _ => {
+                    problems.push(format!("line {n}: port '{p}' is not 1-65535"));
+                    continue;
+                }
+            },
+            _ => (rest, 22),
+        };
+        if host.is_empty() {
+            problems.push(format!("line {n}: no host name or address"));
+            continue;
+        }
+        let alias = alias.unwrap_or(host);
+        if inv.hosts.iter().any(|h| h.alias == alias) {
+            problems.push(format!("line {n}: alias {alias} appears twice"));
+            continue;
+        }
+        inv.hosts.push(HostEntry {
+            hostname: host.to_string(),
+            user: user.to_string(),
+            port,
+            ..HostEntry::new(alias)
+        });
+    }
+    (inv, problems)
 }
 
 fn parse_json_import(t: &str) -> Result<Inventory, StoreError> {
@@ -658,6 +750,48 @@ mod tests {
         Store::open(Path::new(":memory:")).unwrap()
     }
 
+    #[test]
+    fn pasted_host_lists_and_ssh_config_text() {
+        let (inv, problems) = parse_pasted(
+            "# office\nweb01 admin@192.0.2.10\n198.51.100.7:2222\n\nnas 192.0.2.20 extra\n\
+             db01 root@192.0.2.30:0\nweb01 192.0.2.11\nbad/alias 192.0.2.40\n",
+        );
+        let got: Vec<(&str, &str, &str, u16)> = inv
+            .hosts
+            .iter()
+            .map(|h| {
+                (
+                    h.alias.as_str(),
+                    h.hostname.as_str(),
+                    h.user.as_str(),
+                    h.port,
+                )
+            })
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("web01", "192.0.2.10", "admin", 22),
+                ("198.51.100.7", "198.51.100.7", "", 2222)
+            ]
+        );
+        assert_eq!(problems.len(), 4, "{problems:?}");
+        assert!(problems[0].starts_with("line 5:"), "{problems:?}");
+        assert!(problems[1].starts_with("line 6: port"), "{problems:?}");
+        assert!(problems[2].contains("appears twice"), "{problems:?}");
+        assert!(problems[3].starts_with("bad/alias:"), "{problems:?}");
+
+        // OpenSSH config text goes through the config parser.
+        let (inv, problems) =
+            parse_pasted("Host web02\n  HostName 192.0.2.12\n  User deploy\n  Port 2200\n");
+        assert!(problems.is_empty());
+        assert_eq!(inv.hosts[0].alias, "web02");
+        assert_eq!(
+            (inv.hosts[0].user.as_str(), inv.hosts[0].port),
+            ("deploy", 2200)
+        );
+    }
+
     fn sample() -> Inventory {
         config::parse_inventory(
             "# Mail\nHost mail\n  HostName 10.0.0.1\n  User root\n  KexAlgorithms +x\n\nHost web\n  HostName 10.0.0.2\n\nHost *\n  ServerAliveInterval 30\n",
@@ -695,6 +829,20 @@ mod tests {
         assert_eq!(r.removed, 2);
         assert_eq!(s.hosts().unwrap().len(), 1);
         assert_eq!(s.global().unwrap(), "");
+    }
+
+    #[test]
+    fn saved_order_is_the_order_hosts_are_read_in() {
+        let mut s = mem();
+        let ids: Vec<i64> = ["a", "b", "c"]
+            .iter()
+            .map(|a| s.save_host(&HostEntry::new(a)).unwrap())
+            .collect();
+        s.save_order(&[ids[2], ids[0], ids[1]]).unwrap();
+        let order: Vec<String> = s.hosts().unwrap().into_iter().map(|h| h.alias).collect();
+        assert_eq!(order, ["c", "a", "b"]);
+        let cfg = config::to_ssh_config(&s.inventory().unwrap());
+        assert!(cfg.find("Host c").unwrap() < cfg.find("Host a").unwrap());
     }
 
     #[test]

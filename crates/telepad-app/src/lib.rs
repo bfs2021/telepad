@@ -16,13 +16,13 @@ mod update;
 
 pub use msg::{Effect, Msg};
 pub use state::{
-    Drafts, Editor, HostState, ImportDialog, MESSAGE_TTL, Model, OverviewPage, RunInfoView, State,
-    UpdatePhase, UpdateState, matches_filter,
+    Drafts, Editor, HostState, ImportDialog, MESSAGE_TTL, Model, OverviewPage, PasteImport,
+    RunInfoView, State, UpdatePhase, UpdateState, matches_filter,
 };
 pub use table::{
-    Flag, FlagKind, HostGroup, Severity, Sort, SortKey, StackRow, cluster_shown_by, docker_stacks,
-    fullest_disk, host_flags, host_list_groups, host_urgency, hottest, maintenance_flags,
-    overview_rows, urgency, worst_usage,
+    Flag, FlagKind, HostGroup, Severity, Sort, SortKey, StackRow, can_reorder, cluster_shown_by,
+    docker_stacks, drop_index, fullest_disk, host_flags, host_list_groups, host_urgency, hottest,
+    maintenance_flags, overview_rows, urgency, worst_usage,
 };
 pub use update::update;
 

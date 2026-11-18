@@ -45,7 +45,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 |---|---|
 | `src/lib.rs` | Workspace: find `config` / `telepad.db`, first-run import, `.env` fallback key, `open_ssh_alias` |
 | `src/config.rs` | OpenSSH config import/export: hosts (alias, HostName, User, Port, IdentityFile, description, other options, not-monitored tag, RDP-only tag) + global `Host *`/`Match` text; renders the file `ssh -F` reads |
-| `src/store.rs` | SQLite inventory (`rusqlite`, bundled): `hosts` + `settings` tables, `PRAGMA user_version` schema version, transactional import (Merge/Replace), JSON + OpenSSH export, generated `telepad.ssh_config` (atomic write) |
+| `src/store.rs` | SQLite inventory (`rusqlite`, bundled): `hosts` + `settings` tables, `PRAGMA user_version` schema version, transactional import (Merge/Replace), `parse_pasted` (pasted config / JSON / `[alias] [user@]host[:port]` lines), JSON + OpenSSH export, generated `telepad.ssh_config` (atomic write) |
 | `src/collector.rs` | Runs `ssh -F <config> -T -o BatchMode=yes ... <alias> sh -s` with `script.sh` on stdin; `Scope` (which tiers, ping first for hosts without ping reply) and `carry_over` of skipped facts; timeouts; bounded worker pool; sends `Update`s over a channel; RDP-only hosts get ping + TCP probe |
 | `src/script.sh` | Remote read-only collection script, `===SECTION===` markers; tiers `TP_STATIC` (daily) / `TP_SLOW` (6 h) switched by `collector::Scope`, live sections every round |
 | `src/bmc_setup.sh` | Interactive, user-started BMC (`ipmitool`) setup — see Conventions |
@@ -63,7 +63,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 |---|---|
 | `src/state.rs` | `State { model: Model, drafts: Drafts }` (drafts include the overview `Sort`), `OverviewPage`, `HostState` (+ `scope_at`: which tiers are due), `Editor`, `ImportDialog`, `UpdateState`, `matches_filter` |
 | `src/msg.rs` | `Msg` (user intents + results of effects) and `Effect` (work for the runtime) |
-| `src/table.rs` | Overview order: `Sort`/`SortKey`, `overview_rows` (filter + stable sort); `docker_stacks` (Docker overview by stack); host list `host_list_groups`, `worst_usage`; `fullest_disk`, `hottest` |
+| `src/table.rs` | Overview order: `Sort`/`SortKey`, `overview_rows` (filter + stable sort); `drop_index` / `can_reorder` (drag to reorder); `docker_stacks` (Docker overview by stack); host list `host_list_groups`, `worst_usage`; `fullest_disk`, `hottest` |
 | `src/update.rs` | `update(&mut State, Msg, now) -> Vec<Effect>` — the only place the model changes |
 | `src/tests.rs` | Behaviour tests for `update()` (no GUI, no database, no network) |
 
@@ -73,7 +73,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 |---|---|
 | `src/main.rs` | Arguments, `--open-ssh`; no console window in Windows release builds |
 | `src/app.rs` | eframe app: each frame `runtime.frame()`, `views::draw()`, dispatch the returned `Msg`s |
-| `src/runtime.rs` | Executes `Effect`s (database, ssh, collector, update threads, dialogs, clipboard, OS) and feeds results back as `Msg`s |
+| `src/runtime.rs` | Executes `Effect`s (database, ssh, collector, update threads, dialogs, clipboard read/write via `arboard`, OS) and feeds results back as `Msg`s |
 | `src/views/` | One module per screen: `panels` (top bar, status bar, host list), `overview`, `detail`, `sensors`, `docker`, `docker_overview`, `ports`, `editor`, `import`, `confirm`, `update_window` |
 | `src/widgets.rs` | Shared drawing helpers and colours (bars, status dot, fan, thresholds) |
 | `src/icons.rs` | Phosphor icon font glyphs and OS logo detection; `assets/` holds the font and logos |
@@ -149,7 +149,7 @@ in `update()` with a test → run the effect in `runtime.rs` → draw/emit it in
 | Fallback key for hosts without IdentityFile | `SSH_IDENTITY_FILE` in `.env` next to `config` |
 | ssh binary override | `TELEPAD_SSH` env var (default: Windows `System32\OpenSSH\ssh.exe`, else `ssh`) |
 | View settings | `settings` table `ui_compact_host_list` / `ui_group_by_status` (host list toggles) |
-| Update source | `settings` table `update_enabled` / `update_repo` / `update_auto_install` (☰ Hosts ▸ Software update…); check via the github.com `releases/latest` redirect (API only as fallback: 60 req/h per IP); default `yohannaftali/telepad` |
+| Update source | `settings` table `update_enabled` / `update_repo` / `update_auto_install` (☰ ▸ Software update…); check via the github.com `releases/latest` redirect (API only as fallback: 60 req/h per IP); default `yohannaftali/telepad` |
 
 `.env`, `config`, `telepad.db` and `telepad.ssh_config` are git-ignored: never commit an inventory.
 
@@ -195,3 +195,6 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #36 | perf(collector): tiered collection — live, 6-hourly, daily and ping-only checks | closed | 2026-11-18 |
 | #37 | feat(ui): Overview — Docker page grouping containers of all hosts by stack | closed | 2026-11-18 |
 | #38 | fix(ui): overview buttons look flat in light and dark themes | closed | 2026-11-18 |
+| #41 | fix(ui): Hosts menu as icon-only hamburger at the top right | closed | 2026-11-18 |
+| #42 | feat(import): import hosts from pasted plain text | closed | 2026-11-18 |
+| #43 | feat(ui): reorder hosts by drag and drop in host list and overview table | closed | 2026-11-18 |

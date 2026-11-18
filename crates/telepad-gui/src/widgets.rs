@@ -3,7 +3,7 @@
 use std::time::Instant;
 
 use eframe::egui::{self, Color32, RichText};
-use telepad_app::{Flag, FlagKind, HostState, Severity};
+use telepad_app::{Flag, FlagKind, HostState, Msg, Severity};
 use telepad_core::config::{Access, HostEntry};
 
 use crate::icons;
@@ -221,6 +221,47 @@ pub fn ago(t: Option<Instant>) -> String {
                 format!("{}h {}m ago", s / 3600, s % 3600 / 60)
             }
         }
+    }
+}
+
+/// Drag-and-drop payload: index of the host being dragged.
+#[derive(Debug, Clone, Copy)]
+pub struct HostDrag(pub usize);
+
+/// The ⋮⋮ handle a host is dragged by.
+pub fn grip_handle(ui: &mut egui::Ui, i: usize) {
+    ui.dnd_drag_source(ui.make_persistent_id(("host-drag", i)), HostDrag(i), |ui| {
+        ui.label(RichText::new(icons::GRIP).weak())
+    })
+    .response
+    .on_hover_cursor(egui::CursorIcon::Grab)
+    .on_hover_text("Drag to reorder");
+}
+
+/// A host row (`resp`) that a dragged host can be dropped on: a line marks the
+/// upper or lower edge under the pointer, and the release becomes a move.
+pub fn drop_target(resp: &egui::Response, onto: usize, accent: Color32, out: &mut Vec<Msg>) {
+    let Some(pos) = resp.ctx.pointer_latest_pos() else {
+        return;
+    };
+    let below = pos.y > resp.rect.center().y;
+    if resp.dnd_hover_payload::<HostDrag>().is_some() {
+        let y = if below {
+            resp.rect.bottom()
+        } else {
+            resp.rect.top()
+        };
+        resp.ctx.layer_painter(resp.layer_id).hline(
+            resp.rect.x_range(),
+            y,
+            egui::Stroke::new(2.5, accent),
+        );
+    }
+    if let Some(drag) = resp.dnd_release_payload::<HostDrag>() {
+        out.push(Msg::MoveHost {
+            from: drag.0,
+            to: telepad_app::drop_index(drag.0, onto, below),
+        });
     }
 }
 
