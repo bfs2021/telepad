@@ -2,6 +2,15 @@
 
 Newest first.
 
+## [2026-11-19] — Telepad 0.8.0
+- New: **database browser** (#52, #53, #54) — **Open database…** for MariaDB / MySQL /
+  PostgreSQL in containers and on hosts, through the host's SSH login: HeidiSQL-style
+  window with tree, data grid (filter, sort, edit / insert / delete with Post), queries
+  (cancel, confirmation for dangerous statements), table structure editor, Read-only
+  switch, saved connections, passwords optionally in the OS password store.
+- `telepad.db` schema v3 (new `db_connections` table). Older Telepad versions cannot open
+  a database that 0.8.0 has opened; update every copy that shares the file.
+
 ## [2026-11-19] — Tested and merged: database browser (#52, #53, #54)
 - PR #55 merged (all CI green incl. macOS / Linux and the new `db-live` job); issues closed.
 - Tested on Windows 11: gate checks, live driver tests (MariaDB 11, MySQL 8.4,
