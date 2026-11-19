@@ -86,6 +86,8 @@ fn window(ui: &mut egui::Ui, s: &FileSession, d: &mut FileDraft, out: &mut Vec<M
             );
             ui.label(RichText::new(s.host.target()).monospace().weak());
             match (s.status, s.mode) {
+                // A failed connect shows its error and Retry below, not a spinner.
+                (Status::Connecting, _) if s.error.is_some() => {}
                 (Status::Connecting, _) => {
                     ui.spinner();
                     ui.label("connecting…");
