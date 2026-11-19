@@ -318,6 +318,119 @@ and never adds a key twice. Revoke removes every line with that key, whatever it
 or options. Other lines are never touched, and the file is rewritten through a temporary
 copy, so a failure leaves it as it was.
 
+## Database browser (MariaDB / MySQL / PostgreSQL)
+
+Telepad opens the databases it already sees, HeidiSQL style, through the SSH login it
+already uses: no database port is opened to the network and no tunnel or client has to
+be set up by hand.
+
+**Where the button is**
+
+- A running container whose image is MariaDB, MySQL, Percona or PostgreSQL (also
+  `bitnami/postgresql`, PostGIS, TimescaleDB): its **☰** menu (host detail → Docker, and
+  Overview — Docker) has **Open database…**. Tools such as exporters, phpMyAdmin,
+  Adminer and pgAdmin are not offered.
+- A database installed on the host itself (`mysqld` / `mariadbd` / `postgres` in the
+  listening ports, or port 3306 / 5432 with no visible owner that no container
+  publishes): the host detail header shows **Open MariaDB / MySQL :3306** or
+  **Open PostgreSQL :5432**.
+
+Each database opens in its own window. Opening the same one again does nothing while
+its window is open.
+
+**Connect**
+
+The window starts with the connect dialog (like HeidiSQL's session manager):
+
+- **User**, **Password**, **Database** (optional; PostgreSQL uses `postgres` when empty).
+  For a container the user is filled in from its `MARIADB_USER` / `MYSQL_USER` /
+  `POSTGRES_USER`; only that name is read (the filtering happens on the host, so
+  passwords in the container's environment never leave it).
+- **Save password in the system password store**: Windows Credential Manager, macOS
+  Keychain, or the Linux Secret Service (GNOME Keyring on Ubuntu and CentOS / RHEL
+  desktops, KWallet on KDE). With a saved password, leave the field empty. When no store
+  is available (e.g. a Linux desktop without a keyring) the box is disabled and the
+  password is asked for each time. Passwords are never written to `telepad.db` or any
+  other file.
+- **Read-only** (off by default): the server refuses changes from this window, and only
+  `SELECT`, `SHOW`, `DESCRIBE`, `EXPLAIN` and `WITH` run in the Query tab. It can be
+  switched on and off at any time from the toolbar and is remembered per connection.
+- **Connect** opens `ssh -N -L` to the container's address on its Docker network (or to
+  the address the host database listens on) and logs in. User, database and the switches
+  are remembered. **Forget saved connection** deletes them and the saved password.
+
+If the SSH server does not allow port forwarding (`AllowTcpForwarding no`) or the host
+cannot reach the database address, the dialog says so.
+
+**The window**
+
+- Toolbar: **Refresh** (database list and the open database), **Read-only**,
+  **Reconnect** (close the connection and log in again, e.g. after the network dropped).
+- Left: the tree. MariaDB / MySQL: databases → tables and views. PostgreSQL:
+  databases → schemas → tables and views. Click a database or schema to load it, a table
+  to open it; right-click for **Open data**, **Structure**, **New table…**,
+  **Empty (TRUNCATE)…** and **Drop…**. The box on top filters by name.
+- Tabs:
+  - **Host**: server version, databases with their size.
+  - **Database**: tables of the chosen database / schema with estimated rows, size,
+    engine or kind and comment; **New table…**.
+  - **Table**: columns (name, type, length / set, unsigned, NULL, default, extra,
+    comment), indexes, foreign keys, and for MySQL the CREATE statement.
+  - **Data**: the rows (see below).
+  - **Query**: SQL (see below).
+- The status line at the bottom shows the last error or success.
+
+**Data tab**
+
+- 1000 rows per page (100 / 500 / 5000 in the page box), **◀ ▶** for the previous /
+  next page, **↻** to reload. Click a column header to sort: ascending, descending, off.
+- The filter box takes a `WHERE` condition in SQL, e.g. `city = 'Springfield'`; Enter or
+  **Filter** applies it, **Clear** removes it.
+- NULL is shown as a grey *NULL*. Long values and binary data are cut (the full length is
+  shown); right-click a cell for **Copy value** and **View value…**.
+- Editing (only for tables with a primary key or a NOT NULL unique key, and not in
+  Read-only): double-click a cell (the value is selected, type to replace it, Enter to
+  keep, Esc to cancel), or right-click → **Edit** / **Set NULL**. **Insert row** adds a row
+  whose empty cells take the server's default; **Delete row** marks the selected row
+  (again to unmark). Changed cells are highlighted.
+- Nothing is sent until **Post (n)**: it shows the exact SQL; **Run** saves everything in
+  one transaction, and every statement must change exactly one row, otherwise nothing is
+  saved and the error is shown (the edits stay so they can be corrected). **Discard** drops
+  them. Reload, sort, filter and paging wait until the changes are posted or discarded.
+- Tables without such a key, views, binary columns and cut values are shown read-only,
+  with the reason above the grid; change them with a query.
+
+**Query tab**
+
+- Several query tabs (**+**, and the close button for the current tab). Queries run in
+  the database (PostgreSQL: and schema) chosen in the tree.
+- **Run** (F9 or Ctrl+Enter) runs the selection, or everything when nothing is selected;
+  **Run current statement** (Shift+F9 or Ctrl+Shift+Enter) runs the statement at the
+  cursor. Statements run one after the other and stop at the first error, which shows the
+  server's message and line. **Cancel** stops a running statement.
+- `DROP`, `TRUNCATE`, `ALTER … DROP`, and `UPDATE` / `DELETE` without `WHERE` first show
+  a confirmation with the statements.
+- Each statement's result is a tab: rows (up to 10 000 kept) or rows affected, with the
+  time it took.
+
+**Table structure**
+
+- **Edit structure** turns the Table tab into an editor: columns (name, type, length /
+  set, unsigned, NULL, default — no default, NULL, text or an SQL expression —,
+  auto-increment / identity, collation, comment; add, remove, and for MySQL move up /
+  down), indexes (PRIMARY, UNIQUE, KEY, and FULLTEXT for MySQL; pick the columns) and
+  foreign keys (columns, referenced schema / table and columns, ON UPDATE / ON DELETE).
+- **Save…** shows the generated `ALTER TABLE` statements and runs them only after
+  **Run**; **Discard** drops the edits. Index and key columns follow a renamed column.
+  PostgreSQL runs all statements in one transaction (a failure changes nothing) and
+  cannot reorder columns; MySQL commits each statement on its own.
+- **New table…** (Database tab or right-click a database / schema) starts with an
+  auto-increment `id` primary key; **Create…** shows the `CREATE TABLE`.
+- **Rename…**, **Empty…** (TRUNCATE) and **Drop…** show the statement; Empty and Drop
+  also ask you to type the table name.
+
+Closing the window, **Reconnect**, or quitting Telepad stops the SSH tunnel.
+
 ## Fan speeds and BMC temperatures (IPMI)
 
 CPU temperatures work without setup. Fans and inlet/exhaust temperatures on physical

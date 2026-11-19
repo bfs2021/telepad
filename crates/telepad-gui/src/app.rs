@@ -60,6 +60,10 @@ impl TelepadApp {
 }
 
 impl eframe::App for TelepadApp {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.runtime.shutdown();
+    }
+
     fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.runtime.frame(&mut self.state);
         let want = self.state.drafts.theme;

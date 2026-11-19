@@ -3,17 +3,20 @@
 //! clipboard or the OS. Slow work (collection, update check/download) runs on
 //! background threads; the rest is quick and runs inline.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
 use eframe::egui;
+use telepad_app::db::{DbEffect, DbId, DbJob, DbMsg};
 use telepad_app::{Effect, Msg, State};
 use telepad_core::authorized_keys;
 use telepad_core::collector::{self, Collector, SshSettings};
+use telepad_core::db::client::{CancelSlot, Session};
+use telepad_core::db::{detect, secret, tunnel};
 use telepad_core::store;
 use telepad_core::update::{self, Updater, relaunch};
 use telepad_core::{Workspace, config, open_workspace, platform};
@@ -28,6 +31,13 @@ pub struct Runtime {
     /// Results of background threads other than the collector.
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
+    /// One worker thread per database window; dropping it closes the connection.
+    db: HashMap<DbId, DbWorker>,
+}
+
+struct DbWorker {
+    jobs: Sender<DbJob>,
+    cancel: CancelSlot,
 }
 
 impl Runtime {
@@ -46,6 +56,7 @@ impl Runtime {
             collector: None,
             tx,
             rx,
+            db: HashMap::new(),
         };
         match open_workspace(cli_config, cli_db) {
             Ok(ws) => {
@@ -282,6 +293,7 @@ impl Runtime {
                 });
                 None
             }
+            Effect::Db(e) => self.run_db(e),
             Effect::OpenUrl(url) => platform::open_url(&url).err().map(Msg::Notice),
             Effect::Relaunch => match relaunch() {
                 Ok(()) => {
@@ -290,6 +302,153 @@ impl Runtime {
                 }
                 Err(e) => Some(Msg::Notice(e)),
             },
+        }
+    }
+
+    /// Close every database connection and its SSH tunnel (app exit).
+    pub fn shutdown(&mut self) {
+        for (_, w) in self.db.drain() {
+            cancel(&w.cancel);
+        }
+        tunnel::close_all();
+    }
+
+    fn run_db(&mut self, e: DbEffect) -> Option<Msg> {
+        match e {
+            DbEffect::LoadProfile { id, target, host } => {
+                let key = target.key();
+                let profile = self
+                    .ws
+                    .as_ref()
+                    .and_then(|ws| ws.store.db_profile(&key).ok().flatten());
+                let want = profile.as_ref().is_some_and(|p| p.save_password);
+                self.background(move || {
+                    let store = secret::available();
+                    let saved_password =
+                        want && store.is_ok() && matches!(secret::load(&key), Ok(Some(_)));
+                    Msg::Db(DbMsg::Loaded {
+                        id,
+                        profile,
+                        store,
+                        saved_password,
+                    })
+                });
+                if !target.container_id.is_empty()
+                    && let Some(s) = self.ssh.clone()
+                {
+                    self.background(move || {
+                        Msg::Db(DbMsg::EnvUser {
+                            id,
+                            user: detect::fetch_env_user(&s, &host, &target.container_id),
+                        })
+                    });
+                }
+                None
+            }
+            DbEffect::Connect {
+                id,
+                target,
+                host,
+                mut login,
+                use_saved_password,
+                profile,
+            } => {
+                let ssh = self.ssh.clone()?;
+                let (jobs, inbox) = mpsc::channel::<DbJob>();
+                let slot: CancelSlot = Arc::new(Mutex::new(None));
+                if let Some(old) = self.db.insert(
+                    id,
+                    DbWorker {
+                        jobs,
+                        cancel: slot.clone(),
+                    },
+                ) {
+                    cancel(&old.cancel);
+                }
+                let (tx, ctx) = (self.tx.clone(), self.ctx.clone());
+                thread::spawn(move || {
+                    let send = |m: Msg| {
+                        let _ = tx.send(m);
+                        ctx.request_repaint();
+                    };
+                    if use_saved_password {
+                        match secret::load(&profile.key) {
+                            Ok(Some(p)) => login.password = p,
+                            Ok(None) => {}
+                            Err(e) => {
+                                send(Msg::Db(DbMsg::Connected {
+                                    id,
+                                    result: Err(format!("Cannot read the saved password: {e}")),
+                                }));
+                                return;
+                            }
+                        }
+                    }
+                    let password = login.password.clone();
+                    let (session, info) =
+                        match Session::connect(&ssh, &host, &target, login, profile.read_only) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                send(Msg::Db(DbMsg::Connected { id, result: Err(e) }));
+                                return;
+                            }
+                        };
+                    if profile.save_password {
+                        if !password.is_empty()
+                            && let Err(e) = secret::save(&profile.key, &password)
+                        {
+                            send(Msg::Notice(format!("Password not saved: {e}")));
+                        }
+                    } else {
+                        let _ = secret::forget(&profile.key);
+                    }
+                    send(Msg::Db(DbMsg::Connected {
+                        id,
+                        result: Ok(info),
+                    }));
+                    let mut session = session.with_cancel_slot(slot);
+                    for job in inbox {
+                        send(Msg::Db(db_job(&mut session, id, job)));
+                    }
+                });
+                None
+            }
+            DbEffect::Job { id, job } => match self.db.get(&id) {
+                Some(w) => match w.jobs.send(job) {
+                    Ok(()) => None,
+                    Err(mpsc::SendError(job)) => Some(Msg::Db(db_failed(id, job))),
+                },
+                None => Some(Msg::Db(db_failed(id, job))),
+            },
+            DbEffect::Cancel(id) => {
+                if let Some(w) = self.db.get(&id) {
+                    let slot = w.cancel.clone();
+                    thread::spawn(move || cancel(&slot));
+                }
+                None
+            }
+            DbEffect::Close(id) => {
+                if let Some(w) = self.db.remove(&id) {
+                    let slot = w.cancel;
+                    thread::spawn(move || cancel(&slot));
+                }
+                None
+            }
+            DbEffect::SaveProfile(p) => self
+                .with_store(|s| s.save_db_profile(&p))
+                .err()
+                .map(|e| Msg::Notice(format!("Cannot save the database connection: {e}"))),
+            DbEffect::Forget { id, key } => {
+                let removed = self.with_store(|s| s.delete_db_profile(&key));
+                self.background(move || {
+                    let result = removed.and_then(|()| match secret::available() {
+                        Ok(()) => secret::forget(&key),
+                        Err(_) => Ok(()),
+                    });
+                    Msg::Db(DbMsg::Forgotten { id, result })
+                });
+                None
+            }
         }
     }
 
@@ -309,6 +468,139 @@ impl Runtime {
             let _ = tx.send(job());
             ctx.request_repaint();
         });
+    }
+}
+
+/// Stop whatever statement the connection is running (no-op when idle).
+fn cancel(slot: &CancelSlot) {
+    if let Ok(guard) = slot.lock()
+        && let Some(c) = guard.as_ref()
+    {
+        let _ = c.cancel();
+    }
+}
+
+/// Run one database job on the worker thread and report it.
+fn db_job(s: &mut Session, id: DbId, job: DbJob) -> DbMsg {
+    match job {
+        DbJob::Databases => DbMsg::DatabasesLoaded {
+            id,
+            result: s.databases(),
+        },
+        DbJob::Schemas { database } => DbMsg::SchemasLoaded {
+            id,
+            result: s.schemas(&database),
+            database,
+        },
+        DbJob::Tables { database, schema } => DbMsg::TablesLoaded {
+            id,
+            result: s.tables(&database, &schema),
+            database,
+            schema,
+        },
+        DbJob::Info(table) => DbMsg::InfoLoaded {
+            id,
+            result: s.table_info(&table),
+            table,
+        },
+        DbJob::Page {
+            table,
+            filter,
+            sort,
+            offset,
+            limit,
+        } => DbMsg::PageLoaded {
+            id,
+            result: s.page(&table, &filter, &sort, offset, limit),
+            table,
+            offset,
+        },
+        DbJob::Run {
+            tab,
+            database,
+            schema,
+            statements,
+        } => DbMsg::QueryDone {
+            id,
+            tab,
+            results: s.run(&database, &schema, &statements),
+        },
+        DbJob::Apply {
+            database,
+            statements,
+        } => DbMsg::Posted {
+            id,
+            result: s.apply(&database, &statements),
+        },
+        DbJob::Ddl {
+            database,
+            statements,
+            after,
+        } => DbMsg::DdlDone {
+            id,
+            result: s.ddl(&database, &statements),
+            after,
+        },
+        DbJob::ReadOnly(on) => DbMsg::ReadOnlySet {
+            id,
+            on,
+            result: s.set_read_only(on),
+        },
+    }
+}
+
+/// The answer to a job when the connection is gone.
+fn db_failed(id: DbId, job: DbJob) -> DbMsg {
+    const GONE: &str = "Not connected — click Reconnect";
+    match job {
+        DbJob::Databases => DbMsg::DatabasesLoaded {
+            id,
+            result: Err(GONE.into()),
+        },
+        DbJob::Schemas { database } => DbMsg::SchemasLoaded {
+            id,
+            database,
+            result: Err(GONE.into()),
+        },
+        DbJob::Tables { database, schema } => DbMsg::TablesLoaded {
+            id,
+            database,
+            schema,
+            result: Err(GONE.into()),
+        },
+        DbJob::Info(table) => DbMsg::InfoLoaded {
+            id,
+            table,
+            result: Err(GONE.into()),
+        },
+        DbJob::Page { table, offset, .. } => DbMsg::PageLoaded {
+            id,
+            table,
+            offset,
+            result: Err(GONE.into()),
+        },
+        DbJob::Run { tab, .. } => DbMsg::QueryDone {
+            id,
+            tab,
+            results: vec![telepad_core::db::ResultSet {
+                error: Some(GONE.into()),
+                ..Default::default()
+            }],
+        },
+        DbJob::Apply { .. } => DbMsg::Posted {
+            id,
+            result: Err(GONE.into()),
+        },
+        DbJob::Ddl { after, .. } => DbMsg::DdlDone {
+            id,
+            result: Err(GONE.into()),
+            after,
+        },
+        DbJob::ReadOnly(on) => DbMsg::ReadOnlySet {
+            id,
+            on,
+            result: Err(GONE.into()),
+        },
     }
 }
 

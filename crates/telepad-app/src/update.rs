@@ -694,6 +694,20 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
             m.update.error = Some(e);
         }
         Msg::Notice(text) => say(m, now, text),
+        Msg::Db(dm) => {
+            let hosts = &m.hosts;
+            let entry = |alias: &str| {
+                hosts
+                    .iter()
+                    .find(|h| h.entry.alias == alias)
+                    .map(|h| h.entry.clone())
+            };
+            fx.extend(
+                crate::db::update(&mut m.db, &mut d.db, &mut m.db_next, &entry, dm)
+                    .into_iter()
+                    .map(Effect::Db),
+            );
+        }
     }
     fx
 }

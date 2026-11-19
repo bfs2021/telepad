@@ -135,7 +135,7 @@ fn stack(ui: &mut egui::Ui, m: &Model, row: &StackRow<'_>, out: &mut Vec<Msg>) {
                 }
             });
             ui.indent(("docker-overview-body", row.name, i), |ui| {
-                containers(ui, row.name, i, &cs, out);
+                containers(ui, row.name, i, &m.hosts[i].entry.alias, &cs, out);
             });
         }
     });
@@ -153,7 +153,14 @@ fn host_link(ui: &mut egui::Ui, m: &Model, i: usize, out: &mut Vec<Msg>) {
     }
 }
 
-fn containers(ui: &mut egui::Ui, stack: &str, host: usize, cs: &[&Container], out: &mut Vec<Msg>) {
+fn containers(
+    ui: &mut egui::Ui,
+    stack: &str,
+    host: usize,
+    alias: &str,
+    cs: &[&Container],
+    out: &mut Vec<Msg>,
+) {
     egui::Grid::new(("docker-overview", stack, host))
         .striped(true)
         .spacing([14.0, 4.0])
@@ -201,7 +208,7 @@ fn containers(ui: &mut egui::Ui, stack: &str, host: usize, cs: &[&Container], ou
                 ui.label(RichText::new(ips.join("\n")).monospace());
                 let (published, _) = container_ports(c);
                 ui.label(RichText::new(published).monospace());
-                container_menu(ui, c, host, out);
+                container_menu(ui, c, host, alias, out);
                 ui.end_row();
             }
         });
