@@ -2,6 +2,14 @@
 
 Newest first.
 
+## [2026-11-19] — Tested and merged: database browser (#52, #53, #54)
+- PR #55 merged (all CI green incl. macOS / Linux and the new `db-live` job); issues closed.
+- Tested on Windows 11: gate checks, live driver tests (MariaDB 11, MySQL 8.4,
+  PostgreSQL 17), GUI end to end through a local SSH lab with made-up data (filter, sort,
+  cancel of a running query added to the coder's run); real host dockercenter: read-only
+  SSH forward to a container reached MariaDB, no login or write.
+- Not verified by hand: macOS Keychain, Linux Secret Service (built and tested in CI).
+
 ## [2026-11-19] — feat(db): HeidiSQL-style database browser (#52, #53, #54)
 - Issues #52, #53 and #54 addressed on GitHub (one branch, `52-db-browser`).
 - Core `db/`: detection of database containers / host listeners, `ssh -N -L` tunnel
