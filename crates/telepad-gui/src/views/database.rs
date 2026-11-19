@@ -1744,10 +1744,8 @@ fn query_tab(ui: &mut egui::Ui, s: &DbSession, d: &mut DbDraft, out: &mut Vec<Ms
     let focused = output.response.has_focus();
     let (run_key, current_key) = ui.input(|i| {
         let enter = i.key_pressed(egui::Key::Enter) && i.modifiers.command;
-        (
-            i.key_pressed(egui::Key::F9) && !i.modifiers.shift || enter && !i.modifiers.shift,
-            i.key_pressed(egui::Key::F9) && i.modifiers.shift || enter && i.modifiers.shift,
-        )
+        let run = i.key_pressed(egui::Key::F9) || enter;
+        (run && !i.modifiers.shift, run && i.modifiers.shift)
     });
     let selection = (sel_end > sel_start).then(|| text[sel_start..sel_end].to_string());
     let current = sql::statement_at(s.engine(), text, cursor).map(|r| text[r].to_string());
