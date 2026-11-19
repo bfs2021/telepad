@@ -2,6 +2,28 @@
 
 Newest first.
 
+## [2026-11-19] — feat(hosts): Host Management window (#58)
+- Issue #58 addressed on GitHub (branch `58-host-management`).
+- Core `hostsync.rs`: block-preserving config model, compare, apply (upsert / delete in
+  place, new hosts before `Host *` / `Match`), line diff, safe write (changed-on-disk check,
+  timestamped `.bak`, atomic, permissions kept). `store`: `apply_host_changes` (one
+  transaction), `hostsync_config_path` setting.
+- App: `hostsync.rs` (pending per side, Merge / Replace / Sync with conflicts, edit / add
+  form, preview, apply), 6 `update()` tests. GUI: `views/host_sync.rs`, menu entry,
+  runtime load / pick / apply, icons SYNC / ARROW_LEFT / ARROW_RIGHT / DESKTOP / EQUALS /
+  NOT_EQUALS.
+- Docs: USER_MANUAL (Host Management), README, AGENTS.
+- Verified: fmt, clippy, all tests (core 106, app 60, gui 5); GUI with a throwaway database
+  and a made-up config file (never the real ~/.ssh/config): compare, Sync with a conflict,
+  preview diff, Apply (backup written, comments / Include / Match / Host * / shared line
+  kept, Telepad host added), shared-line rows, Add to config with an option, preview in a
+  small window. Not verified: macOS / Linux file permissions (CI only).
+
+## [2026-11-19] — feat(hosts): Host Management window — compare and sync Telepad hosts with an OpenSSH config
+- Issue #58 created on GitHub
+- Scope: core (config parse / write with backup, compare), app, gui (new window), docs
+- Labels: enhancement
+
 ## [2026-11-19] — Telepad 0.8.0
 - New: **database browser** (#52, #53, #54) — **Open database…** for MariaDB / MySQL /
   PostgreSQL in containers and on hosts, through the host's SSH login: HeidiSQL-style

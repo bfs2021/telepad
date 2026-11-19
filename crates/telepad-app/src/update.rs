@@ -24,6 +24,7 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
         model: m,
         drafts: d,
     } = state;
+    let hosts_changed = matches!(msg, Msg::HostsLoaded { .. });
     match msg {
         Msg::Started {
             db_path,
@@ -708,6 +709,19 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
                     .map(Effect::Db),
             );
         }
+        Msg::HostSync(hm) => {
+            let db: Vec<_> = m.hosts.iter().map(|h| h.entry.clone()).collect();
+            let (effects, follow) =
+                crate::hostsync::update(&mut m.host_sync, &mut d.host_sync, &db, hm);
+            fx.extend(effects.into_iter().map(Effect::HostSync));
+            if follow.iter().any(|f| f == "reload-hosts") {
+                fx.push(Effect::LoadHosts);
+            }
+        }
+    }
+    if hosts_changed && let Some(hs) = m.host_sync.as_mut() {
+        let db: Vec<_> = m.hosts.iter().map(|h| h.entry.clone()).collect();
+        crate::hostsync::refresh(hs, &db);
     }
     fx
 }

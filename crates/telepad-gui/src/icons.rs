@@ -41,6 +41,13 @@ pub const CARET_UP: &str = "\u{e13c}";
 pub const CARET_RIGHT: &str = "\u{e13a}";
 pub const DOT: &str = "\u{e18a}";
 pub const WINDOWS: &str = "\u{e692}";
+// Host Management.
+pub const SYNC: &str = "\u{e0a0}";
+pub const ARROW_RIGHT: &str = "\u{e06c}";
+pub const ARROW_LEFT: &str = "\u{e058}";
+pub const DESKTOP: &str = "\u{e560}";
+pub const EQUALS: &str = "\u{e21c}";
+pub const NOT_EQUALS: &str = "\u{eda6}";
 // Database window.
 pub const TABLE: &str = "\u{e476}";
 pub const PLAY: &str = "\u{e3d0}";
@@ -402,6 +409,12 @@ mod tests {
             CARET_RIGHT,
             DOT,
             WINDOWS,
+            SYNC,
+            ARROW_RIGHT,
+            ARROW_LEFT,
+            DESKTOP,
+            EQUALS,
+            NOT_EQUALS,
             TABLE,
             PLAY,
             STOP,

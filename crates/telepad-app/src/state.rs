@@ -48,6 +48,8 @@ pub struct Model {
     pub db: Vec<crate::db::DbSession>,
     /// Last database window id handed out.
     pub db_next: crate::db::DbId,
+    /// Host Management window.
+    pub host_sync: Option<crate::hostsync::HostSync>,
 }
 
 /// A key added to / revoked from several hosts.
@@ -98,6 +100,8 @@ pub struct Drafts {
     pub keys: Option<KeysDraft>,
     /// Form fields of each database window.
     pub db: std::collections::BTreeMap<crate::db::DbId, crate::db::DbDraft>,
+    /// Host Management window: filter, selection, edit form.
+    pub host_sync: crate::hostsync::HostSyncDraft,
 }
 
 /// "Public keys…" window: the pasted key, the chosen hosts and the
@@ -171,6 +175,7 @@ impl Default for Drafts {
             paste: None,
             keys: None,
             db: Default::default(),
+            host_sync: Default::default(),
         }
     }
 }

@@ -251,6 +251,8 @@ machine that is down looks different from one where only SSH is broken.
 ## Import and export
 
 - **☰ → Import ~/.ssh/config** imports your own OpenSSH client config in one click.
+  To compare it host by host and copy changes in either direction, use
+  [Host Management](#host-management-compare-with-an-openssh-config).
 - **☰ → Import from a file…** reads any file you pick:
   - an **OpenSSH client config** (any file that is not JSON);
   - **JSON** with a list of hosts: a Telepad export from any version, `{"hosts": [...]}`
@@ -288,6 +290,59 @@ machine that is down looks different from one where only SSH is broken.
 
 `telepad.db` is a normal SQLite file: back it up by copying it while Telepad is closed,
 or use Export. You can also inspect it with any SQLite tool.
+
+## Host Management (compare with an OpenSSH config)
+
+**☰ → Host Management… (compare with ~/.ssh/config)** shows Telepad's hosts (database
+icon, left) next to the hosts of an OpenSSH config file (monitor icon, right), so the two
+can be kept in step in either direction. Nothing is written until you click **Apply**.
+
+**Which file:** `~/.ssh/config` at first. **File…** picks another file, **Folder…** a folder
+(its `config` file is used); the choice is remembered. **Reload** reads the file again. A
+file that does not exist yet counts as empty and is created on Apply.
+
+**The list:** one row per alias, with
+
+- **=** the same on both sides,
+- **≠** different — the column on the right names the fields (HostName, User, Port,
+  IdentityFile, Options, Description, Not monitored, RDP only),
+- the database icon: only in Telepad; the monitor icon: only in the config.
+
+**Filter** narrows the rows by alias, address or description; **Only differences** hides the
+rows that are the same. Aliases defined together with others on one line (`Host jump
+bastion`) or by a pattern are listed as **shared Host line**: they can be copied to Telepad,
+but not changed in the file (do that by hand).
+
+**Per host:** **→** copies Telepad's host to the config, **←** the config's host to Telepad;
+the pencil edits the host on that side, the bin deletes it there; **↶** undoes the pending
+changes of that host. Tick several rows to do the same for all of them (copy, delete, undo).
+
+**All at once:**
+
+- **Telepad → config** / **Config → Telepad**, each as **Merge** (add missing hosts, update
+  different ones, keep hosts only the target has) or **Replace** (the target becomes a copy:
+  hosts only the target has are removed; shared lines, `Host *` and `Match` stay).
+- **Sync**: hosts only on one side are copied to the other; hosts that differ are marked
+  red and you pick a side for each with → or ← before you can apply.
+
+**Add to Telepad… / Add to config…** opens a small form (alias, HostName, User, Port,
+IdentityFile, description, other options one per line, Not monitored, RDP only). Edits use
+the same form. Hosts are checked like in the host editor.
+
+Changed hosts are marked **pending** and counted at the bottom. **Discard** drops them.
+**Preview and apply…** shows Telepad's changes and the config file as a diff (`-` removed,
+`+` added); **Apply** writes them:
+
+- Before the config is written, a copy is saved next to it as
+  `config.telepad-YYYYMMDD-HHMMSS.bak` (UTC time). The file is replaced in one step and
+  keeps its permissions.
+- Only the blocks of the hosts you changed are rewritten. Comments, `Include`, `Match`,
+  `Host *`, shared lines and the order of everything else stay as they are; new hosts go
+  after the last host block, before `Host *` / `Match`. Telepad's description and its
+  "not monitored" / "rdp only" marks are written as `#` comments, as by Export.
+- If the file was changed by something else since it was loaded, Apply stops: click
+  **Reload** (your pending changes stay) and look at the preview again.
+- Telepad's changes are saved in one transaction; a renamed host keeps its place in the list.
 
 ## Public keys (add / revoke)
 

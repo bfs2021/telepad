@@ -10,6 +10,7 @@
 //! This crate does not depend on any GUI toolkit.
 
 pub mod db;
+pub mod hostsync;
 mod msg;
 mod state;
 mod table;
@@ -31,3 +32,5 @@ pub use update::update;
 mod tests;
 #[cfg(test)]
 mod tests_db;
+#[cfg(test)]
+mod tests_hostsync;

@@ -16,6 +16,9 @@ hosts with the **system OpenSSH client** and the keys you already use, runs a
 - **Open SSH** (a terminal logged in to the host), **Copy ssh command**, and **Open RDP**
   for Windows hosts without SSH
 - **Public keys…**: add or revoke one SSH public key on many hosts at once
+- **Host Management…**: Telepad's hosts next to `~/.ssh/config` (or another config
+  file); copy, edit or delete per host, merge / replace / sync, with a preview and a
+  backup before the file is written
 - **Open database…**: a HeidiSQL-style window for MariaDB / MySQL / PostgreSQL in a
   container or on the host, through the SSH login (tree, data grid with editing, queries,
   table structure); passwords optionally in the system password store
