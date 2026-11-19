@@ -222,4 +222,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #52 | feat(db): HeidiSQL-style database browser — connect, browse tables and run queries | closed | 2026-11-19 |
 | #53 | feat(db): edit, insert and delete rows in the database Data grid | closed | 2026-11-19 |
 | #54 | feat(db): edit table structure — columns, indexes, foreign keys | closed | 2026-11-19 |
-| #58 | feat(hosts): Host Management window — compare and sync Telepad hosts with an OpenSSH config | ready-for-review | 2026-11-19 |
+| #58 | feat(hosts): Host Management window — compare and sync Telepad hosts with an OpenSSH config | closed | 2026-11-19 |
