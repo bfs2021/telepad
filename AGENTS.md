@@ -215,6 +215,6 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #43 | feat(ui): reorder hosts by drag and drop in host list and overview table | closed | 2026-11-18 |
 | #45 | fix(store): Merge import puts new hosts between existing ones | closed | 2026-11-18 |
 | #49 | feat(keys): add or revoke an SSH public key on selected servers | closed | 2026-11-18 |
-| #52 | feat(db): HeidiSQL-style database browser — connect, browse tables and run queries | ready-for-review | 2026-11-19 |
-| #53 | feat(db): edit, insert and delete rows in the database Data grid | ready-for-review | 2026-11-19 |
-| #54 | feat(db): edit table structure — columns, indexes, foreign keys | ready-for-review | 2026-11-19 |
+| #52 | feat(db): HeidiSQL-style database browser — connect, browse tables and run queries | closed | 2026-11-19 |
+| #53 | feat(db): edit, insert and delete rows in the database Data grid | closed | 2026-11-19 |
+| #54 | feat(db): edit table structure — columns, indexes, foreign keys | closed | 2026-11-19 |
