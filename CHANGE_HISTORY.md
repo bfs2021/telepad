@@ -2,6 +2,21 @@
 
 Newest first.
 
+## [2026-11-19] — Telepad 0.8.2
+- New: **Open files…** (#62) — a WinSCP-style window per host: this computer on the left,
+  the host on the right; upload / download by buttons, F5 or drag and drop, overwrite
+  question (Overwrite / Skip / Newer only / Apply to all), progress with speed and Cancel.
+  Over SFTP; hosts without SFTP use `scp`; rsync (with a dry-run preview) when both sides
+  have it. Last folders are remembered per host.
+
+## [2026-11-19] — Tested and merged: file window (#62)
+- PR #65 merged (CI green on Windows, macOS, Linux, `db-live`, `files-live`); issue closed.
+- Tested on Windows 11 against local lab containers (SFTP and no-SFTP), throwaway database,
+  second monitor: open / close / exit end the ssh process, browsing, sort / filter / hidden,
+  transfers by buttons, F5 and drag and drop, overwrite question, 300 MiB upload + Cancel,
+  scp fallback modes, host down + Retry.
+- Fixed while testing: spinner next to a failed connect.
+
 ## [2026-11-19] — feat(files): WinSCP-style file window (#62)
 - Issue #62 addressed on GitHub (branch `62-file-window`).
 - Core `files/`: own SFTP v3 client over `ssh -s <alias> sftp` (pipelined, 16 × 32 KiB),
