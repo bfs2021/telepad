@@ -2,6 +2,12 @@
 
 Newest first.
 
+## [2026-11-19] — Telepad 0.8.1
+- New: **Host Management** (#58) — ☰ → Host Management… shows Telepad's hosts next to
+  `~/.ssh/config` (or another config file): compare per host, copy / edit / delete on
+  either side, Merge / Replace / Sync, preview, then Apply with a timestamped backup of
+  the config; comments, Include, Match and Host * stay as they are.
+
 ## [2026-11-19] — Tested and merged: Host Management (#58)
 - PR #59 merged (CI green on Windows, macOS, Linux); issue closed.
 - Tested on Windows 11 with a throwaway database and a made-up config (second monitor,
