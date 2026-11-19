@@ -458,6 +458,38 @@ PRAGMA user_version = {SCHEMA_VERSION};"
         Ok(())
     }
 
+    /// Host Management: delete `deletes` (ids), then save `upserts` (new or
+    /// updated), all in one transaction.
+    pub fn apply_host_changes(
+        &self,
+        upserts: &[HostEntry],
+        deletes: &[i64],
+    ) -> Result<(), StoreError> {
+        let tx = self.conn.unchecked_transaction()?;
+        for id in deletes {
+            self.delete_host(*id)?;
+        }
+        for h in upserts {
+            self.save_host(h)?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// The config file Host Management compares with (`None`: `~/.ssh/config`).
+    pub fn host_sync_path(&self) -> Result<Option<String>, StoreError> {
+        self.setting("hostsync_config_path")
+    }
+
+    pub fn set_host_sync_path(&self, path: &str) -> Result<(), StoreError> {
+        self.conn.execute(
+            "INSERT INTO settings(key, value) VALUES('hostsync_config_path', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![path],
+        )?;
+        Ok(())
+    }
+
     pub fn delete_host(&self, id: i64) -> Result<(), StoreError> {
         self.conn
             .execute("DELETE FROM hosts WHERE id = ?1", params![id])?;
@@ -934,6 +966,34 @@ mod tests {
         assert!(s.save_host(&HostEntry::new("has space")).is_err());
         s.delete_host(id).unwrap();
         assert_eq!(s.hosts().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn host_changes_apply_in_one_transaction() {
+        let s = mem();
+        let a = s.save_host(&HostEntry::new("alpha")).unwrap();
+        s.save_host(&HostEntry::new("bravo")).unwrap();
+        let mut a2 = HostEntry::new("alpha");
+        a2.id = Some(a);
+        a2.user = "ops".into();
+        // A failing upsert (duplicate alias) rolls the delete back too.
+        let dup = HostEntry::new("bravo");
+        assert!(s.apply_host_changes(&[a2.clone(), dup], &[a]).is_err());
+        assert_eq!(s.hosts().unwrap().len(), 2);
+        s.apply_host_changes(&[a2, HostEntry::new("charlie")], &[])
+            .unwrap();
+        let h = s.hosts().unwrap();
+        assert_eq!(
+            h.iter().map(|h| h.alias.as_str()).collect::<Vec<_>>(),
+            vec!["alpha", "bravo", "charlie"]
+        );
+        assert_eq!(h[0].user, "ops");
+        assert_eq!(s.host_sync_path().unwrap(), None);
+        s.set_host_sync_path("/tmp/x/config").unwrap();
+        assert_eq!(
+            s.host_sync_path().unwrap().as_deref(),
+            Some("/tmp/x/config")
+        );
     }
 
     #[test]

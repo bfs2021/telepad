@@ -12,6 +12,7 @@ use std::time::Instant;
 
 use eframe::egui;
 use telepad_app::db::{DbEffect, DbId, DbJob, DbMsg};
+use telepad_app::hostsync::{HsEffect, HsMsg};
 use telepad_app::{Effect, Msg, State};
 use telepad_core::authorized_keys;
 use telepad_core::collector::{self, Collector, SshSettings};
@@ -294,6 +295,7 @@ impl Runtime {
                 None
             }
             Effect::Db(e) => self.run_db(e),
+            Effect::HostSync(e) => self.run_hostsync(e),
             Effect::OpenUrl(url) => platform::open_url(&url).err().map(Msg::Notice),
             Effect::Relaunch => match relaunch() {
                 Ok(()) => {
@@ -311,6 +313,85 @@ impl Runtime {
             cancel(&w.cancel);
         }
         tunnel::close_all();
+    }
+
+    fn run_hostsync(&mut self, e: HsEffect) -> Option<Msg> {
+        use telepad_core::hostsync;
+        let msg = |m: HsMsg| Some(Msg::HostSync(m));
+        match e {
+            HsEffect::Load { path, remember } => {
+                let ws = self.ws.as_ref()?;
+                let raw = path
+                    .or_else(|| ws.store.host_sync_path().ok().flatten())
+                    .unwrap_or_else(|| "~/.ssh/config".into());
+                let mut p = telepad_core::expand_home(raw.trim());
+                if p.is_dir() {
+                    p = p.join("config");
+                }
+                if remember {
+                    let _ = ws.store.set_host_sync_path(&p.display().to_string());
+                }
+                msg(HsMsg::Loaded {
+                    path: p.display().to_string(),
+                    result: hostsync::read(&p),
+                })
+            }
+            HsEffect::Pick { folder } => {
+                let mut dialog = rfd::FileDialog::new().set_title(if folder {
+                    "Folder with an OpenSSH config file"
+                } else {
+                    "OpenSSH config file"
+                });
+                let ssh = telepad_core::expand_home("~/.ssh");
+                if ssh.is_dir() {
+                    dialog = dialog.set_directory(ssh);
+                }
+                let picked = if folder {
+                    dialog.pick_folder()
+                } else {
+                    dialog.pick_file()
+                }?;
+                msg(HsMsg::Picked(picked.display().to_string()))
+            }
+            HsEffect::Apply {
+                path,
+                expected,
+                config_text,
+                upserts,
+                deletes,
+            } => {
+                let ws = self.ws.as_ref()?;
+                let mut done = Vec::new();
+                if let Some(text) = config_text {
+                    match hostsync::write(Path::new(&path), &expected, &text) {
+                        Ok(Some(b)) => done.push(format!("{path} saved (backup {})", b.display())),
+                        Ok(None) => done.push(format!("{path} created")),
+                        Err(e) => return msg(HsMsg::Applied(Err(e))),
+                    }
+                }
+                if !upserts.is_empty() || !deletes.is_empty() {
+                    if let Err(e) = ws.store.apply_host_changes(&upserts, &deletes) {
+                        let e = if done.is_empty() {
+                            format!("Telepad's hosts were not changed: {e}")
+                        } else {
+                            format!(
+                                "{} — but Telepad's hosts were not changed: {e}",
+                                done.join("; ")
+                            )
+                        };
+                        return msg(HsMsg::Applied(Err(e)));
+                    }
+                    done.push(format!(
+                        "{} Telepad change(s) saved",
+                        upserts.len() + deletes.len()
+                    ));
+                }
+                if done.is_empty() {
+                    done.push("Nothing to change".into());
+                }
+                msg(HsMsg::Applied(Ok(done.join("; "))))
+            }
+        }
     }
 
     fn run_db(&mut self, e: DbEffect) -> Option<Msg> {
