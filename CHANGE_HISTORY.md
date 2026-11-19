@@ -2,6 +2,14 @@
 
 Newest first.
 
+## [2026-11-19] — Tested and merged: Host Management (#58)
+- PR #59 merged (CI green on Windows, macOS, Linux); issue closed.
+- Tested on Windows 11 with a throwaway database and a made-up config (second monitor,
+  200 %): compare, Sync conflict, Merge / Replace, add / edit / rename / delete, preview,
+  Apply with backup, outside-change refusal, Reload with pending changes.
+- Fixed while testing: preview height in a small window, shared-line aliases listed,
+  Reload allowed with pending changes.
+
 ## [2026-11-19] — feat(hosts): Host Management window (#58)
 - Issue #58 addressed on GitHub (branch `58-host-management`).
 - Core `hostsync.rs`: block-preserving config model, compare, apply (upsert / delete in
