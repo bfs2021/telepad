@@ -2,6 +2,35 @@
 
 Newest first.
 
+## [2026-11-19] — feat(files): WinSCP-style file window (#62)
+- Issue #62 addressed on GitHub (branch `62-file-window`).
+- Core `files/`: own SFTP v3 client over `ssh -s <alias> sftp` (pipelined, 16 × 32 KiB),
+  fallback for hosts without SFTP (`sh` listing + `scp -O`, uploads without `-p` so Windows
+  modes never make files world-writable), rsync (both-sides check, dry run, `--protect-args`,
+  no `--delete`), transfer plan (recursive, existing files) and run (`.telepad-part` then
+  rename, mtime kept, cancel). `store`: last folders per host (`files_paths:<alias>`).
+  `expand_home("~")` now returns the home folder.
+- App `files.rs` (+ `tests_files.rs`): sessions, panes, sort / filter / hidden, transfers
+  with progress and speed, overwrite question (Overwrite / Skip / Newer only / Apply to all),
+  rsync preview → Run. GUI: **Open files…** in the host header opens one native window per host;
+  drag and drop, F5, double-click to open folders.
+- Test lab `tests/sshd/` (Alpine OpenSSH + sftp-server + rsync; `NO_SFTP=1`) and CI job
+  `files-live`.
+- Docs: USER_MANUAL "Files", README, SECURITY, AGENTS (fifth write exception, architecture).
+- Verified: fmt, clippy, all tests, live tests against the lab (SFTP, fallback, rsync check);
+  GUI on Windows 11 (second monitor) against the lab: browse, upload / download of a folder
+  tree, drag and drop, overwrite question (Newer only, Apply to all + Overwrite), 300 MiB
+  upload with progress and Cancel (no part file left), scp fallback upload / download with
+  correct modes. Not verified: rsync copy from Windows (rsync not installed here; the
+  rsync run is covered on Linux CI), macOS / Linux GUI.
+
+## [2026-11-19] — Milestone "File manager (WinSCP-style)" (#62, #63, #64)
+- Milestone 2 created on GitHub; three issues, all `enhancement`
+- #62 feat(files): WinSCP-style file window — local and remote panes with transfers
+  (scope: core `files` module over `ssh -s sftp`, app, gui; new write exception)
+- #63 feat(files): file operations — new, rename, delete, permissions (depends on #62)
+- #64 feat(files): built-in VS Code-like editor for local and remote files (depends on #62)
+
 ## [2026-11-19] — Telepad 0.8.1
 - New: **Host Management** (#58) — ☰ → Host Management… shows Telepad's hosts next to
   `~/.ssh/config` (or another config file): compare per host, copy / edit / delete on

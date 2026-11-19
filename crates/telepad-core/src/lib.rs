@@ -5,6 +5,7 @@ pub mod config;
 pub mod db;
 pub mod docker_actions;
 pub mod eol;
+pub mod files;
 pub mod hostsync;
 pub mod model;
 pub mod parse;
@@ -89,10 +90,16 @@ pub fn dotenv_value(dir: &Path, key: &str) -> Option<String> {
 }
 
 pub fn expand_home(p: &str) -> PathBuf {
-    if let Some(rest) = p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\")) {
+    let rest = if p == "~" {
+        Some("")
+    } else {
+        p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\"))
+    };
+    if let Some(rest) = rest {
         let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"));
         if let Some(h) = home {
-            return PathBuf::from(h).join(rest);
+            let h = PathBuf::from(h);
+            return if rest.is_empty() { h } else { h.join(rest) };
         }
     }
     PathBuf::from(p)

@@ -10,6 +10,7 @@ mod detail;
 mod docker;
 mod docker_overview;
 mod editor;
+mod files;
 mod host_sync;
 mod import;
 mod keys;
@@ -86,6 +87,7 @@ pub fn draw(root: &mut egui::Ui, m: &Model, d: &mut Drafts, now: Instant) -> Vec
     update_window::update_window(&ctx, m, d, &mut out);
     database::db_windows(&ctx, m, d, &mut out);
     host_sync::host_sync_window(&ctx, m, d, &mut out);
+    files::file_windows(&ctx, m, d, &mut out, now);
     out
 }
 

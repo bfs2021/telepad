@@ -38,6 +38,16 @@ pub fn detail(
         if ui.button(il(connect_icon(&h.entry), open)).clicked() {
             out.push(Msg::Ssh(i));
         }
+        if !rdp
+            && ui
+                .button(il(icons::FOLDER, "Open files…"))
+                .on_hover_text("This computer and the host side by side: browse and copy files")
+                .clicked()
+        {
+            out.push(Msg::Files(telepad_app::files::FmMsg::Open(
+                h.entry.alias.clone(),
+            )));
+        }
         if !rdp && ui.button(il(icons::COPY, "Copy ssh command")).clicked() {
             out.push(Msg::CopySsh(i));
         }

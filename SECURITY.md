@@ -26,6 +26,12 @@ Only the latest release is supported.
   the OS password store (Windows Credential Manager, macOS Keychain, Linux Secret
   Service); never in `telepad.db` or another file. Only the database user name is read
   from a container's environment, filtered on the host.
+- **Open files…** copies files only when the user clicks Upload / Download, presses F5 or
+  drags files, over the host's normal SSH login (SFTP subsystem; `scp -O` or rsync over the
+  same login as fallbacks; never `sudo`). An existing file is replaced only after the user
+  chose Overwrite (or Newer only); copies go to a `.telepad-part` file that is renamed when
+  complete. Uploads never copy Windows' file modes, so files are not made world-writable;
+  rsync runs a dry run first and never deletes.
 - New host keys are accepted on first connect (`StrictHostKeyChecking=accept-new`);
   a **changed** host key is rejected, as with plain ssh.
 - Host fields are validated before they are saved, because the database is rendered

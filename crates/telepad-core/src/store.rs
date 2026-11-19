@@ -476,6 +476,30 @@ PRAGMA user_version = {SCHEMA_VERSION};"
         Ok(())
     }
 
+    /// File window: the local and remote folders last open for a host.
+    pub fn files_paths(&self, alias: &str) -> Result<Option<(String, String)>, StoreError> {
+        Ok(self
+            .setting(&format!("files_paths:{alias}"))?
+            .and_then(|v| {
+                v.split_once('\n')
+                    .map(|(l, r)| (l.to_string(), r.to_string()))
+            }))
+    }
+
+    pub fn set_files_paths(
+        &self,
+        alias: &str,
+        local: &str,
+        remote: &str,
+    ) -> Result<(), StoreError> {
+        self.conn.execute(
+            "INSERT INTO settings(key, value) VALUES(?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![format!("files_paths:{alias}"), format!("{local}\n{remote}")],
+        )?;
+        Ok(())
+    }
+
     /// The config file Host Management compares with (`None`: `~/.ssh/config`).
     pub fn host_sync_path(&self) -> Result<Option<String>, StoreError> {
         self.setting("hostsync_config_path")
@@ -990,6 +1014,13 @@ mod tests {
         assert_eq!(h[0].user, "ops");
         assert_eq!(s.host_sync_path().unwrap(), None);
         s.set_host_sync_path("/tmp/x/config").unwrap();
+        assert_eq!(s.files_paths("web1").unwrap(), None);
+        s.set_files_paths("web1", "/home/me/my site", "/srv/my app")
+            .unwrap();
+        assert_eq!(
+            s.files_paths("web1").unwrap(),
+            Some(("/home/me/my site".into(), "/srv/my app".into()))
+        );
         assert_eq!(
             s.host_sync_path().unwrap().as_deref(),
             Some("/tmp/x/config")

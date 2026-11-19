@@ -5,6 +5,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -12,6 +13,7 @@ use std::time::Instant;
 
 use eframe::egui;
 use telepad_app::db::{DbEffect, DbId, DbJob, DbMsg};
+use telepad_app::files::{FmEffect, FmId, FmMsg, Mode, Side};
 use telepad_app::hostsync::{HsEffect, HsMsg};
 use telepad_app::{Effect, Msg, State};
 use telepad_core::authorized_keys;
@@ -34,6 +36,14 @@ pub struct Runtime {
     rx: Receiver<Msg>,
     /// One worker thread per database window; dropping it closes the connection.
     db: HashMap<DbId, DbWorker>,
+    /// File windows: browse worker (one SFTP connection) and transfer cancel flags.
+    files: HashMap<FmId, FileWorker>,
+}
+
+struct FileWorker {
+    browse: Sender<(Side, String)>,
+    cancels: HashMap<u64, Arc<AtomicBool>>,
+    host: telepad_core::config::HostEntry,
 }
 
 struct DbWorker {
@@ -58,6 +68,7 @@ impl Runtime {
             tx,
             rx,
             db: HashMap::new(),
+            files: HashMap::new(),
         };
         match open_workspace(cli_config, cli_db) {
             Ok(ws) => {
@@ -296,6 +307,7 @@ impl Runtime {
             }
             Effect::Db(e) => self.run_db(e),
             Effect::HostSync(e) => self.run_hostsync(e),
+            Effect::Files(e) => self.run_files(e),
             Effect::OpenUrl(url) => platform::open_url(&url).err().map(Msg::Notice),
             Effect::Relaunch => match relaunch() {
                 Ok(()) => {
@@ -312,7 +324,313 @@ impl Runtime {
         for (_, w) in self.db.drain() {
             cancel(&w.cancel);
         }
+        for (_, w) in self.files.drain() {
+            for c in w.cancels.values() {
+                c.store(true, Ordering::Relaxed);
+            }
+        }
         tunnel::close_all();
+    }
+
+    fn run_files(&mut self, e: FmEffect) -> Option<Msg> {
+        use telepad_core::files::{self as cf, fallback, rsync as crsync, sftp::Sftp, transfer};
+        let fm = |m: FmMsg| Msg::Files(m);
+        match e {
+            FmEffect::Connect { id, host } => {
+                let ssh = self.ssh.clone()?;
+                let remembered = self
+                    .ws
+                    .as_ref()
+                    .and_then(|ws| ws.store.files_paths(&host.alias).ok().flatten());
+                let (jobs, inbox) = mpsc::channel::<(Side, String)>();
+                if let Some(old) = self.files.insert(
+                    id,
+                    FileWorker {
+                        browse: jobs,
+                        cancels: HashMap::new(),
+                        host: host.clone(),
+                    },
+                ) {
+                    for c in old.cancels.values() {
+                        c.store(true, Ordering::Relaxed);
+                    }
+                }
+                let (tx, ctx) = (self.tx.clone(), self.ctx.clone());
+                let (h2, s2) = (host.clone(), ssh.clone());
+                self.background(move || {
+                    fm(FmMsg::RsyncChecked {
+                        id,
+                        result: crsync::local_available()
+                            .and_then(|()| crsync::remote_available(&s2, &h2)),
+                    })
+                });
+                thread::spawn(move || {
+                    let send = |m: Msg| {
+                        let _ = tx.send(m);
+                        ctx.request_repaint();
+                    };
+                    let local_home = cf::local_home();
+                    // SFTP first; hosts without an SFTP server get the sh / scp fallback.
+                    let mut sftp = None;
+                    let result = match Sftp::connect(&ssh, &host).and_then(|mut c| {
+                        let home = c.realpath(".")?;
+                        Ok((c, home))
+                    }) {
+                        Ok((c, home)) => {
+                            sftp = Some(c);
+                            Ok((Mode::Sftp, home, remembered))
+                        }
+                        Err(e) if e.contains("no SFTP server") => fallback::list(&ssh, &host, "~")
+                            .map(|(home, _)| (Mode::Fallback, home, remembered)),
+                        Err(e) => Err(e),
+                    };
+                    let ok = result.is_ok();
+                    send(fm(FmMsg::Connected {
+                        id,
+                        result,
+                        local_home,
+                    }));
+                    if !ok {
+                        return;
+                    }
+                    for (side, path) in inbox {
+                        let result = match side {
+                            Side::Local => {
+                                let p =
+                                    telepad_core::expand_home(path.trim()).display().to_string();
+                                cf::list_local(&p).map(|v| (p, v))
+                            }
+                            Side::Remote => match sftp.as_mut() {
+                                Some(c) => c
+                                    .realpath(&path)
+                                    .and_then(|abs| c.list(&abs).map(|v| (abs, v))),
+                                None => fallback::list(&ssh, &host, &path),
+                            },
+                        };
+                        send(fm(FmMsg::Listed { id, side, result }));
+                    }
+                });
+                None
+            }
+            FmEffect::List { id, side, path } => match self.files.get(&id) {
+                Some(w) => w.browse.send((side, path)).err().map(|_| {
+                    fm(FmMsg::Listed {
+                        id,
+                        side,
+                        result: Err("Not connected — click Retry".into()),
+                    })
+                }),
+                None => None,
+            },
+            FmEffect::Plan {
+                id,
+                transfer: tid,
+                direction,
+                sources,
+                dest,
+            } => {
+                let (ssh, cancel, host) = self.transfer_setup(id, tid)?;
+                self.background(move || {
+                    let result = Sftp::connect(&ssh, &host).and_then(|mut c| {
+                        transfer::plan(&mut c, direction, &sources, &dest, &cancel)
+                    });
+                    fm(FmMsg::Planned {
+                        id,
+                        transfer: tid,
+                        result,
+                    })
+                });
+                None
+            }
+            FmEffect::Run {
+                id,
+                transfer: tid,
+                direction,
+                items,
+                decisions,
+            } => {
+                let (ssh, cancel, host) = self.transfer_setup(id, tid)?;
+                let (tx, ctx) = (self.tx.clone(), self.ctx.clone());
+                thread::spawn(move || {
+                    let send = |m: Msg| {
+                        let _ = tx.send(m);
+                        ctx.request_repaint();
+                    };
+                    let mut c = match Sftp::connect(&ssh, &host) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            send(fm(FmMsg::Finished {
+                                id,
+                                transfer: tid,
+                                result: Err(e),
+                            }));
+                            return;
+                        }
+                    };
+                    // Bytes are summed and sent a few times a second.
+                    let mut pending = 0u64;
+                    let mut last = Instant::now();
+                    let counts =
+                        transfer::run(&mut c, direction, &items, &decisions, &cancel, &mut |ev| {
+                            match ev {
+                                transfer::Event::Bytes(n) => {
+                                    pending += n;
+                                    if last.elapsed() < std::time::Duration::from_millis(150) {
+                                        return;
+                                    }
+                                    last = Instant::now();
+                                    let n = std::mem::take(&mut pending);
+                                    send(fm(FmMsg::Progress {
+                                        id,
+                                        transfer: tid,
+                                        event: transfer::Event::Bytes(n),
+                                    }));
+                                }
+                                other => {
+                                    if pending > 0 {
+                                        let n = std::mem::take(&mut pending);
+                                        send(fm(FmMsg::Progress {
+                                            id,
+                                            transfer: tid,
+                                            event: transfer::Event::Bytes(n),
+                                        }));
+                                    }
+                                    send(fm(FmMsg::Progress {
+                                        id,
+                                        transfer: tid,
+                                        event: other,
+                                    }));
+                                }
+                            }
+                        });
+                    let result = if cancel.load(Ordering::Relaxed) {
+                        Err("Cancelled".to_string())
+                    } else {
+                        Ok(counts)
+                    };
+                    send(fm(FmMsg::Finished {
+                        id,
+                        transfer: tid,
+                        result,
+                    }));
+                });
+                None
+            }
+            FmEffect::Scp {
+                id,
+                transfer: tid,
+                direction,
+                sources,
+                dest,
+            } => {
+                let (ssh, cancel, host) = self.transfer_setup(id, tid)?;
+                self.background(move || {
+                    let (mut copied, mut failed, mut last_err) = (0, 0, None);
+                    for (src, _) in &sources {
+                        let r = match direction {
+                            transfer::Direction::Upload => {
+                                fallback::copy(&ssh, &host, true, src, &dest, &cancel)
+                            }
+                            transfer::Direction::Download => {
+                                fallback::copy(&ssh, &host, false, &dest, src, &cancel)
+                            }
+                        };
+                        match r {
+                            Ok(()) => copied += 1,
+                            Err(e) => {
+                                failed += 1;
+                                last_err = Some(e);
+                            }
+                        }
+                        if cancel.load(Ordering::Relaxed) {
+                            break;
+                        }
+                    }
+                    let result = match (cancel.load(Ordering::Relaxed), copied, last_err) {
+                        (true, _, _) => Err("Cancelled".into()),
+                        (false, 0, Some(e)) => Err(e),
+                        _ => Ok((copied, 0, failed)),
+                    };
+                    fm(FmMsg::Finished {
+                        id,
+                        transfer: tid,
+                        result,
+                    })
+                });
+                None
+            }
+            FmEffect::Rsync {
+                id,
+                transfer: tid,
+                direction,
+                sources,
+                dest,
+                dry_run,
+            } => {
+                let (ssh, _cancel, host) = self.transfer_setup(id, tid)?;
+                self.background(move || {
+                    let upload = direction == transfer::Direction::Upload;
+                    let result =
+                        crsync::run(&crsync::args(&ssh, &host, upload, &sources, &dest, dry_run));
+                    if dry_run {
+                        fm(FmMsg::RsyncPreviewed {
+                            id,
+                            transfer: tid,
+                            result,
+                        })
+                    } else {
+                        fm(FmMsg::Finished {
+                            id,
+                            transfer: tid,
+                            result: result.map(|changed| (changed.len(), 0, 0)),
+                        })
+                    }
+                });
+                None
+            }
+            FmEffect::Cancel { id, transfer: tid } => {
+                if let Some(c) = self.files.get(&id).and_then(|w| w.cancels.get(&tid)) {
+                    c.store(true, Ordering::Relaxed);
+                }
+                None
+            }
+            FmEffect::Close(id) => {
+                if let Some(w) = self.files.remove(&id) {
+                    for c in w.cancels.values() {
+                        c.store(true, Ordering::Relaxed);
+                    }
+                }
+                None
+            }
+            FmEffect::SavePaths {
+                alias,
+                local,
+                remote,
+            } => self
+                .with_store(|s| s.set_files_paths(&alias, &local, &remote))
+                .err()
+                .map(Msg::Notice),
+        }
+    }
+
+    /// ssh settings, a cancel flag and the host for one transfer.
+    fn transfer_setup(
+        &mut self,
+        id: FmId,
+        tid: u64,
+    ) -> Option<(
+        SshSettings,
+        Arc<AtomicBool>,
+        telepad_core::config::HostEntry,
+    )> {
+        let ssh = self.ssh.clone()?;
+        let w = self.files.get_mut(&id)?;
+        let flag = w
+            .cancels
+            .entry(tid)
+            .or_insert_with(|| Arc::new(AtomicBool::new(false)))
+            .clone();
+        Some((ssh, flag, w.host.clone()))
     }
 
     fn run_hostsync(&mut self, e: HsEffect) -> Option<Msg> {
