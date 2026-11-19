@@ -189,6 +189,8 @@ pub enum Msg {
     Db(crate::db::DbMsg),
     /// Host Management window (#58).
     HostSync(crate::hostsync::HsMsg),
+    /// File windows (#62).
+    Files(crate::files::FmMsg),
 }
 
 /// Work for the runtime. Effects are the only way to reach the database, ssh,
@@ -265,4 +267,6 @@ pub enum Effect {
     Db(crate::db::DbEffect),
     /// Host Management: read / pick / write the config, apply Telepad changes.
     HostSync(crate::hostsync::HsEffect),
+    /// File windows: connect, list, copy (worker threads per window).
+    Files(crate::files::FmEffect),
 }

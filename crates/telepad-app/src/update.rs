@@ -709,6 +709,27 @@ pub fn update(state: &mut State, msg: Msg, now: Instant) -> Vec<Effect> {
                     .map(Effect::Db),
             );
         }
+        Msg::Files(fm) => {
+            let hosts = &m.hosts;
+            let entry = |alias: &str| {
+                hosts
+                    .iter()
+                    .find(|h| h.entry.alias == alias)
+                    .map(|h| h.entry.clone())
+            };
+            fx.extend(
+                crate::files::update(
+                    &mut m.files,
+                    &mut d.files,
+                    &mut m.files_next,
+                    &entry,
+                    fm,
+                    now,
+                )
+                .into_iter()
+                .map(Effect::Files),
+            );
+        }
         Msg::HostSync(hm) => {
             let db: Vec<_> = m.hosts.iter().map(|h| h.entry.clone()).collect();
             let (effects, follow) =

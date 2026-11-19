@@ -50,6 +50,9 @@ pub struct Model {
     pub db_next: crate::db::DbId,
     /// Host Management window.
     pub host_sync: Option<crate::hostsync::HostSync>,
+    /// File windows (#62), one per host.
+    pub files: Vec<crate::files::FileSession>,
+    pub files_next: crate::files::FmId,
 }
 
 /// A key added to / revoked from several hosts.
@@ -102,6 +105,8 @@ pub struct Drafts {
     pub db: std::collections::BTreeMap<crate::db::DbId, crate::db::DbDraft>,
     /// Host Management window: filter, selection, edit form.
     pub host_sync: crate::hostsync::HostSyncDraft,
+    /// File windows: path bars, filters, selection.
+    pub files: std::collections::BTreeMap<crate::files::FmId, crate::files::FileDraft>,
 }
 
 /// "Public keys…" window: the pasted key, the chosen hosts and the
@@ -176,6 +181,7 @@ impl Default for Drafts {
             keys: None,
             db: Default::default(),
             host_sync: Default::default(),
+            files: Default::default(),
         }
     }
 }

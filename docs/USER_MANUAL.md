@@ -114,8 +114,8 @@ support. Sort by **Flags** to see the most urgent hosts first.
 ## Host detail
 
 The header shows the status, OS logo, alias and `user@address`. Below it are the buttons
-**Open SSH** / **Open RDP**, **Copy ssh command**, **Refresh**, then **Edit**, **Clone** and
-**Delete**. On a narrow window the buttons (and the top bar) wrap onto a second line instead
+**Open SSH** / **Open RDP**, **Open files…** (see [Files](#files-upload--download)),
+**Copy ssh command**, **Refresh**, then **Edit**, **Clone** and **Delete**. On a narrow window the buttons (and the top bar) wrap onto a second line instead
 of being cut off. Below that:
 
 - **System**: OS, kernel, architecture, uptime, CPU model and cores, load average.
@@ -343,6 +343,53 @@ Changed hosts are marked **pending** and counted at the bottom. **Discard** drop
 - If the file was changed by something else since it was loaded, Apply stops: click
   **Reload** (your pending changes stay) and look at the preview again.
 - Telepad's changes are saved in one transaction; a renamed host keeps its place in the list.
+
+## Files (upload / download)
+
+**Open files…** in a host's header opens a separate window, WinSCP style: **This computer**
+on the left, the host on the right. It logs in as the host's normal SSH login (the same
+user and key as **Open SSH**); nothing has to be installed on the host. Several file
+windows can be open at once, one per host.
+
+- **Top bar**: the host and `user@address`, then how files are copied:
+  - **SFTP** — the normal case (the host's `sftp-server`, which every OpenSSH server has
+    unless it was switched off).
+  - **⚠ no SFTP on the host: copies with scp** — the host has no SFTP server. Telepad then
+    lists folders with a small read-only `sh` script and copies with `scp -O`. There is no
+    overwrite question and no progress bar in this mode: scp replaces files of the same name.
+  - **Hidden files** shows names starting with `.`.
+  - **Use rsync** — only shown when rsync is installed both on this computer and on the
+    host (otherwise the reason, for example *rsync is not installed on this computer*).
+- **Panes**: each has **Up**, **Home** and **Refresh**, the folder path (type a path and
+  press Enter to go there; on this computer `~` is your home folder) and a filter box that narrows the list
+  by name. The columns are Name, Size, Modified (UTC) and Permissions, plus Owner on the
+  host side; click a header to sort, click it again to reverse. Folders are listed first.
+  - Click a row to select it; Ctrl+click adds or removes rows. The pane title shows how
+    many are selected.
+  - Double-click a folder (or **..**) to open it.
+  - Both folders are remembered per host for the next time the window opens.
+- **Copy** the selected files and folders (folders with everything in them):
+  - **Upload** (local → host folder) or **Download** (host → local folder), or
+  - **F5** copies the selection of the pane you clicked last to the other pane, or
+  - drag the files onto the other pane.
+- **The file exists**: when a file is already there, Telepad shows both sizes and times and
+  asks **Overwrite**, **Skip**, **Newer only** (overwrite only when the copied file is
+  newer) or **Cancel transfer**. Tick **Apply to all … existing file(s)** to answer once for
+  the whole transfer.
+- **Transfers** (bottom): every copy, newest first, with a progress bar (bytes done, speed,
+  current file) and **Cancel**. A finished row says how many files were copied, skipped
+  or failed; failures are listed under **error(s)**. **Clear finished** removes the
+  finished rows.
+
+Files are written next to their target as `<name>.telepad-part` and renamed only when
+complete, so a cancelled or failed copy never leaves half a file in place of a good one.
+Copied files keep their modified time (so **Newer only** works the next time). On the host,
+new files get the permissions the host's umask gives them; Telepad never runs `sudo`, so
+only folders the login user may write to can be changed.
+
+**rsync**: with **Use rsync** ticked, Upload / Download first run `rsync --dry-run` and list
+what would change (*rsync would change N path(s)*); **Run rsync** then copies them. rsync
+copies only what differs and never deletes anything on the other side.
 
 ## Public keys (add / revoke)
 

@@ -57,3 +57,28 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p telepad-core --locked db::client::live -- --nocapture
+
+  # File window (#62–#64) against a real SSH server with and without SFTP
+  # (tests/sshd image, made-up files), including rsync on the Linux runner.
+  files-live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Start test SSH servers
+        run: |
+          set -e
+          sudo apt-get install -y rsync >/dev/null || true
+          ssh-keygen -q -t ed25519 -N '' -f "$RUNNER_TEMP/key"
+          docker build -q -t telepad-test-sshd tests/sshd
+          K="$(cat "$RUNNER_TEMP/key.pub")"
+          docker run -d -e AUTHORIZED_KEY="$K" -p 127.0.0.1:2223:22 telepad-test-sshd
+          docker run -d -e AUTHORIZED_KEY="$K" -e NO_SFTP=1 -p 127.0.0.1:2224:22 telepad-test-sshd
+          for p in 2223 2224; do
+            printf 'Host lab%s\n  HostName 127.0.0.1\n  Port %s\n  User telepad\n  IdentityFile %s\n  UserKnownHostsFile %s\n  StrictHostKeyChecking accept-new\n\n' \
+              "$p" "$p" "$RUNNER_TEMP/key" "$RUNNER_TEMP/known_hosts" >> "$RUNNER_TEMP/config"
+          done
+          for i in $(seq 1 30); do ssh -F "$RUNNER_TEMP/config" -o BatchMode=yes lab2223 true && break; sleep 1; done
+          echo "TELEPAD_TEST_SSH=$RUNNER_TEMP/config|lab2223|lab2224" >> "$GITHUB_ENV"
+      - run: cargo test -p telepad-core --locked files::live_tests -- --nocapture

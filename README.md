@@ -15,6 +15,9 @@ hosts with the **system OpenSSH client** and the keys you already use, runs a
 - Docker containers and compose stacks: image, state, container IP per network, published ports
 - **Open SSH** (a terminal logged in to the host), **Copy ssh command**, and **Open RDP**
   for Windows hosts without SSH
+- **Open files…**: a WinSCP-style window per host, this computer on the left and the host
+  on the right; upload / download with drag and drop, overwrite questions and progress,
+  over SFTP (scp when the host has no SFTP server, rsync when both sides have it)
 - **Public keys…**: add or revoke one SSH public key on many hosts at once
 - **Host Management…**: Telepad's hosts next to `~/.ssh/config` (or another config
   file); copy, edit or delete per host, merge / replace / sync, with a preview and a
@@ -25,7 +28,7 @@ hosts with the **system OpenSSH client** and the keys you already use, runs a
 
 No agent is installed on the hosts, and monitoring never changes anything on them. The
 only changes are actions you start and confirm yourself (Docker actions, BMC setup,
-Public keys, database edits). There is no server
+Public keys, database edits, file copies). There is no server
 and no web UI: it is one portable desktop app plus a headless `telepad-check`.
 
 Releases are built for Windows (x86_64), macOS (Apple silicon and Intel) and Linux
