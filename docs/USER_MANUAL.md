@@ -235,7 +235,7 @@ up the others. The window stays responsive while hosts load.
 | **User**, **Port**, **IdentityFile** | As in an OpenSSH config; empty = ssh's defaults. For IdentityFile, the arrow next to the field lists the private keys found in `~/.ssh`; **Browse…** opens in `~/.ssh` (on macOS press Cmd+Shift+. in the dialog to see other hidden folders); typing `~/.ssh/id_ed25519` works too |
 | **Access** | **SSH (monitored)** or **RDP only (Windows)** |
 | **Monitored** | Untick to keep a host in the list (for SSH/RDP buttons) without polling it |
-| **Other ssh options** | One `Keyword value` per line, e.g. `ProxyJump bastion` or `KexAlgorithms +diffie-hellman-group1-sha1` |
+| **Other ssh options** | One `Keyword value` per line, e.g. `ProxyJump bastion`, `KexAlgorithms +diffie-hellman-group1-sha1` or `LocalForward 8080 127.0.0.1:80`; values are written to the ssh config exactly as typed (quote an argument yourself if it contains spaces) |
 
 **Edit** changes a host, **Clone** starts a new host with the same User, Port and
 IdentityFile, and **Delete** removes it after a confirmation. Right-click a host in the

@@ -248,7 +248,11 @@ pub fn parse_inventory(text: &str) -> Inventory {
                         "user" => h.user = value.to_string(),
                         "port" => h.port = value.parse().unwrap_or(22),
                         "identityfile" => h.identity_file = Some(value.to_string()),
-                        _ => h.options.push((key.to_string(), value.to_string())),
+                        // Options can take several arguments (`LocalForward 8080 host:80`) and
+                        // keep their own quoting: stored and written back verbatim.
+                        _ => h
+                            .options
+                            .push((key.to_string(), raw_value(line).to_string())),
                     }
                 }
             }
@@ -270,6 +274,12 @@ fn split_kv(line: &str) -> (&str, &str) {
     let key = &line[..idx];
     let value = line[idx..].trim_start_matches([' ', '\t', '=']).trim();
     (key, value.trim_matches('"'))
+}
+
+/// The value of a `Key value` / `Key=value` line exactly as written (quotes kept).
+fn raw_value(line: &str) -> &str {
+    let idx = line.find([' ', '\t', '=']).unwrap_or(line.len());
+    line[idx..].trim_start_matches([' ', '\t', '=']).trim()
 }
 
 fn quote(v: &str) -> String {
@@ -307,7 +317,9 @@ pub fn to_ssh_config(inv: &Inventory) -> String {
             out.push_str(&format!("  IdentityFile {}\n", quote(f)));
         }
         for (k, v) in &h.options {
-            out.push_str(&format!("  {k} {}\n", quote(v)));
+            // Verbatim: quoting the whole value would turn `LocalForward 1 h:1` into one
+            // argument ("Missing target argument").
+            out.push_str(&format!("  {k} {v}\n"));
         }
     }
     if !inv.global.trim().is_empty() {
@@ -321,6 +333,30 @@ pub fn to_ssh_config(inv: &Inventory) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn multi_argument_options_are_written_verbatim() {
+        let cfg = "Host office\n  HostName 192.0.2.5\n  LocalForward 30001 127.0.0.1:30001\n  ProxyCommand ssh -W %h:%p \"jump host\"\n";
+        let inv = parse_inventory(cfg);
+        let h = &inv.hosts[0];
+        assert_eq!(
+            h.options,
+            vec![
+                ("LocalForward".into(), "30001 127.0.0.1:30001".into()),
+                ("ProxyCommand".into(), "ssh -W %h:%p \"jump host\"".into()),
+            ]
+        );
+        let out = to_ssh_config(&inv);
+        assert!(
+            out.contains("\n  LocalForward 30001 127.0.0.1:30001\n"),
+            "{out}"
+        );
+        assert!(
+            out.contains("\n  ProxyCommand ssh -W %h:%p \"jump host\"\n"),
+            "{out}"
+        );
+        assert_eq!(parse_inventory(&out).hosts[0].options, h.options);
+    }
 
     const CFG: &str = "# VM03\n# Git server\nHost git\n  HostName 192.0.2.24\n  User admin\n  IdentityFile ~/.ssh/id_ed25519\n\nHost app\n  Hostname 192.0.2.17\n  user admin\n  Port 2222\n\nHost legacy\n  HostName 198.51.100.2\n  #KexAlgorithms +x\n  KexAlgorithms +diffie-hellman-group1-sha1\n  User olduser\n\n# defaults\nHost *\n  ServerAliveInterval 30\n";
 

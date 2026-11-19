@@ -2,6 +2,12 @@
 
 Newest first.
 
+## [2026-11-19] — Telepad 0.8.3
+- Fixed: hosts with an option that takes several arguments (e.g. `LocalForward 30001
+  127.0.0.1:30001`) broke every ssh connection with "Missing target argument" — the
+  generated `telepad.ssh_config` quoted the whole value. Options are now written exactly as
+  entered; the file is regenerated on the next start.
+
 ## [2026-11-19] — Telepad 0.8.2
 - New: **Open files…** (#62) — a WinSCP-style window per host: this computer on the left,
   the host on the right; upload / download by buttons, F5 or drag and drop, overwrite
