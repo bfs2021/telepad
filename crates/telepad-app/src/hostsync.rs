@@ -415,15 +415,13 @@ pub fn update(
             }
         }
         HsMsg::Reload => {
-            if hs.config.is_empty() {
-                hs.loading = true;
-                fx.push(HsEffect::Load {
-                    path: Some(hs.path.clone()),
-                    remember: false,
-                });
-            } else {
-                hs.error = Some("Apply or discard the config changes before reloading".into());
-            }
+            // Pending changes are per alias, so they still apply to the new text.
+            hs.loading = true;
+            hs.preview = None;
+            fx.push(HsEffect::Load {
+                path: Some(hs.path.clone()),
+                remember: false,
+            });
         }
         HsMsg::Loaded { path, result } => {
             hs.loading = false;

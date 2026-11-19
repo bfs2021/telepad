@@ -354,7 +354,29 @@ fn choosing_another_file_waits_for_pending_changes() {
     let mut s = opened();
     send(&mut s, HsMsg::ToConfig(vec!["charlie".into()]));
     assert!(send(&mut s, HsMsg::Picked("/tmp/other".into())).is_empty());
-    assert!(send(&mut s, HsMsg::Reload).is_empty());
+    // Reload keeps the pending changes (e.g. after "changed outside Telepad").
+    assert!(matches!(
+        &send(&mut s, HsMsg::Reload)[..],
+        [HsEffect::Load {
+            remember: false,
+            ..
+        }]
+    ));
+    send(
+        &mut s,
+        HsMsg::Loaded {
+            path: "/home/me/.ssh/config".into(),
+            result: Ok(format!(
+                "{CONFIG}# edited elsewhere
+"
+            )),
+        },
+    );
+    assert_eq!(hs(&s).config.len(), 1, "still pending after reload");
+    assert!(hs(&s).file.as_ref().unwrap().text.ends_with(
+        "# edited elsewhere
+"
+    ));
     send(&mut s, HsMsg::Discard);
     assert!(matches!(
         &send(&mut s, HsMsg::Picked("/tmp/other".into()))[..],

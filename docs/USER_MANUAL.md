@@ -341,7 +341,7 @@ Changed hosts are marked **pending** and counted at the bottom. **Discard** drop
   after the last host block, before `Host *` / `Match`. Telepad's description and its
   "not monitored" / "rdp only" marks are written as `#` comments, as by Export.
 - If the file was changed by something else since it was loaded, Apply stops: click
-  **Reload** and check again.
+  **Reload** (your pending changes stay) and look at the preview again.
 - Telepad's changes are saved in one transaction; a renamed host keeps its place in the list.
 
 ## Public keys (add / revoke)
