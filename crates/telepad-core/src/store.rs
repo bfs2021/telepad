@@ -9,7 +9,7 @@ use serde::Serialize;
 use crate::config::{self, Access, HostEntry, Inventory};
 use crate::update::UpdateConfig;
 
-const SCHEMA_VERSION: i32 = 2;
+const SCHEMA_VERSION: i32 = 3;
 const JSON_FORMAT: &str = "telepad/hosts";
 
 #[derive(Debug, thiserror::Error)]
@@ -105,6 +105,17 @@ impl Default for UiPrefs {
     }
 }
 
+/// Saved database connections (Database browser). Never holds a password:
+/// that lives in the OS password store (`db::secret`).
+const DB_CONNECTIONS: &str = "CREATE TABLE IF NOT EXISTS db_connections (
+    key           TEXT PRIMARY KEY,
+    user          TEXT    NOT NULL DEFAULT '',
+    database      TEXT    NOT NULL DEFAULT '',
+    save_password INTEGER NOT NULL DEFAULT 0,
+    read_only     INTEGER NOT NULL DEFAULT 0,
+    updated_at    TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);";
+
 #[derive(Serialize)]
 struct JsonFile {
     format: String,
@@ -139,7 +150,7 @@ impl Store {
                  value TEXT NOT NULL
              );",
         )?;
-        let v: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        let mut v: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         if v == 1 {
             // v2: hosts.access ('ssh' | 'rdp')
             conn.execute_batch(
@@ -148,8 +159,21 @@ impl Store {
                  PRAGMA user_version = 2;
                  COMMIT;",
             )?;
+            v = 2;
+        }
+        if v == 2 {
+            // v3: saved database connections (#52); passwords are not stored here.
+            conn.execute_batch(&format!(
+                "BEGIN;
+{DB_CONNECTIONS}
+PRAGMA user_version = 3;
+COMMIT;"
+            ))?;
         } else if v == 0 {
-            conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
+            conn.execute_batch(&format!(
+                "{DB_CONNECTIONS}
+PRAGMA user_version = {SCHEMA_VERSION};"
+            ))?;
         } else if v > SCHEMA_VERSION {
             return Err(StoreError::Invalid(format!(
                 "{} was written by a newer Telepad (schema {v})",
@@ -160,6 +184,47 @@ impl Store {
             conn,
             path: path.to_path_buf(),
         })
+    }
+
+    /// Saved database connection for a [`crate::db::DbTarget::key`].
+    pub fn db_profile(&self, key: &str) -> Result<Option<crate::db::Profile>, StoreError> {
+        let mut st = self.conn.prepare(
+            "SELECT key, user, database, save_password, read_only FROM db_connections WHERE key = ?1",
+        )?;
+        let mut rows = st.query([key])?;
+        Ok(match rows.next()? {
+            Some(r) => Some(crate::db::Profile {
+                key: r.get(0)?,
+                user: r.get(1)?,
+                database: r.get(2)?,
+                save_password: r.get::<_, i64>(3)? != 0,
+                read_only: r.get::<_, i64>(4)? != 0,
+            }),
+            None => None,
+        })
+    }
+
+    pub fn save_db_profile(&self, p: &crate::db::Profile) -> Result<(), StoreError> {
+        self.conn.execute(
+            "INSERT INTO db_connections (key, user, database, save_password, read_only, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, CURRENT_TIMESTAMP)
+             ON CONFLICT(key) DO UPDATE SET user = ?2, database = ?3, save_password = ?4,
+                 read_only = ?5, updated_at = CURRENT_TIMESTAMP",
+            rusqlite::params![
+                p.key,
+                p.user,
+                p.database,
+                p.save_password as i64,
+                p.read_only as i64
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_db_profile(&self, key: &str) -> Result<(), StoreError> {
+        self.conn
+            .execute("DELETE FROM db_connections WHERE key = ?1", [key])?;
+        Ok(())
     }
 
     pub fn path(&self) -> &Path {
@@ -872,6 +937,40 @@ mod tests {
     }
 
     #[test]
+    fn saves_database_connections_without_passwords() {
+        let s = mem();
+        let key = "dock1 / container shop-db / mysql";
+        assert_eq!(s.db_profile(key).unwrap(), None);
+        let mut p = crate::db::Profile {
+            key: key.into(),
+            user: "shop".into(),
+            database: "shop".into(),
+            save_password: true,
+            read_only: false,
+        };
+        s.save_db_profile(&p).unwrap();
+        p.read_only = true;
+        s.save_db_profile(&p).unwrap();
+        assert_eq!(s.db_profile(key).unwrap(), Some(p));
+        let cols: Vec<String> = s
+            .conn
+            .prepare("SELECT name FROM pragma_table_info('db_connections')")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert!(
+            !cols
+                .iter()
+                .any(|c| c.contains("pass") && c != "save_password"),
+            "{cols:?}"
+        );
+        s.delete_db_profile(key).unwrap();
+        assert_eq!(s.db_profile(key).unwrap(), None);
+    }
+
+    #[test]
     fn migrates_v1_database_and_keeps_rows() {
         let dir = std::env::temp_dir().join(format!("telepad-mig-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -905,7 +1004,8 @@ mod tests {
             .conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 2);
+        assert_eq!(v, 3, "v1 -> v2 -> v3");
+        assert_eq!(s.db_profile("x").unwrap(), None, "db_connections exists");
         drop(s);
         let _ = std::fs::remove_dir_all(&dir);
     }

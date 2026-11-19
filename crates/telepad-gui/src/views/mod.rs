@@ -5,6 +5,7 @@
 mod cards;
 mod cluster;
 mod confirm;
+mod database;
 mod detail;
 mod docker;
 mod docker_overview;
@@ -82,6 +83,7 @@ pub fn draw(root: &mut egui::Ui, m: &Model, d: &mut Drafts, now: Instant) -> Vec
     run_info::run_info_window(&ctx, d, &mut out);
     confirm::delete_confirm(&ctx, m, &mut out);
     update_window::update_window(&ctx, m, d, &mut out);
+    database::db_windows(&ctx, m, d, &mut out);
     out
 }
 

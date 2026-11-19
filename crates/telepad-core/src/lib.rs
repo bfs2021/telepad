@@ -2,6 +2,7 @@ pub mod authorized_keys;
 pub mod cluster;
 pub mod collector;
 pub mod config;
+pub mod db;
 pub mod docker_actions;
 pub mod eol;
 pub mod model;

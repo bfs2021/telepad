@@ -16,10 +16,13 @@ hosts with the **system OpenSSH client** and the keys you already use, runs a
 - **Open SSH** (a terminal logged in to the host), **Copy ssh command**, and **Open RDP**
   for Windows hosts without SSH
 - **Public keys…**: add or revoke one SSH public key on many hosts at once
+- **Open database…**: a HeidiSQL-style window for MariaDB / MySQL / PostgreSQL in a
+  container or on the host, through the SSH login (tree, data grid with editing, queries,
+  table structure); passwords optionally in the system password store
 
 No agent is installed on the hosts, and monitoring never changes anything on them. The
 only changes are actions you start and confirm yourself (Docker actions, BMC setup,
-Public keys). There is no server
+Public keys, database edits). There is no server
 and no web UI: it is one portable desktop app plus a headless `telepad-check`.
 
 Releases are built for Windows (x86_64), macOS (Apple silicon and Intel) and Linux

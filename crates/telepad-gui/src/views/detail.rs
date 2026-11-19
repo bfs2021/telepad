@@ -64,6 +64,26 @@ pub fn detail(
         if ui.button(il(icons::TRASH, "Delete")).clicked() {
             out.push(Msg::Delete(i));
         }
+        // Databases installed on the host itself; container databases are in
+        // each container's menu.
+        if let Some(r) = &h.report {
+            let local = telepad_core::db::detect::host_targets(&h.entry.alias, r);
+            if !local.is_empty() {
+                ui.separator();
+            }
+            for t in local {
+                if ui
+                    .button(il(
+                        icons::DATABASE,
+                        &format!("Open {} :{}", t.engine.title(), t.port),
+                    ))
+                    .on_hover_text("Tables, data and queries through this host's SSH login")
+                    .clicked()
+                {
+                    out.push(Msg::Db(telepad_app::db::DbMsg::Open(t)));
+                }
+            }
+        }
     });
     if !h.entry.note.is_empty() {
         ui.label(RichText::new(&h.entry.note).size(15.0).italics());
@@ -284,7 +304,7 @@ pub fn detail(
                     if r.docker.containers.is_empty() {
                         ui.label(RichText::new("No containers").weak());
                     } else {
-                        docker_stacks(ui, r, i, host_address(&h.entry), out);
+                        docker_stacks(ui, r, i, &h.entry.alias, host_address(&h.entry), out);
                     }
                 }
             }

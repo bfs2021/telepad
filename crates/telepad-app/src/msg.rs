@@ -185,6 +185,8 @@ pub enum Msg {
     },
     /// Text for the status bar (e.g. from opening a terminal).
     Notice(String),
+    /// Database windows (#52–#54).
+    Db(crate::db::DbMsg),
 }
 
 /// Work for the runtime. Effects are the only way to reach the database, ssh,
@@ -257,4 +259,6 @@ pub enum Effect {
         key: PublicKey,
         hosts: Vec<HostEntry>,
     },
+    /// Database windows: connect, load, run, save (worker per window).
+    Db(crate::db::DbEffect),
 }

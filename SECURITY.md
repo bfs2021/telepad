@@ -17,12 +17,21 @@ Only the latest release is supported.
   the user starts and confirms: Docker / BMC actions in a terminal, and **Public keys…**
   (adds or removes one line in the login user's `~/.ssh/authorized_keys` after the user
   types `add` / `revoke`; it refuses to revoke the key Telepad itself logs in with).
+- **Open database…** reaches a database only through `ssh -N -L` over the host's normal
+  login (`BatchMode=yes`); no database port is opened and nothing on the host is changed.
+  Data and structure change only after the user saw the exact SQL and clicked Run
+  (`DROP` / `TRUNCATE` also need the table name typed); values are bound parameters and
+  names are quoted. **Read-only** makes the server refuse writes for that connection.
+  Database passwords are kept in memory, or — when the user ticks **Save password** — in
+  the OS password store (Windows Credential Manager, macOS Keychain, Linux Secret
+  Service); never in `telepad.db` or another file. Only the database user name is read
+  from a container's environment, filtered on the host.
 - New host keys are accepted on first connect (`StrictHostKeyChecking=accept-new`);
   a **changed** host key is rejected, as with plain ssh.
 - Host fields are validated before they are saved, because the database is rendered
   into an ssh config; values are passed to ssh as separate arguments, never through a shell.
 - Updates are downloaded only from this repository's GitHub release downloads and
   checked against the published SHA-256 before anything is replaced.
-- Telepad stores no passwords or keys: it uses the OpenSSH client and the key files
-  your ssh config already names. `telepad.db` holds host names, addresses, users and
+- Telepad stores no SSH passwords or keys: it uses the OpenSSH client and the key files
+  your ssh config already names (database passwords: see above). `telepad.db` holds host names, addresses, users and
   key *paths*, so treat it like an ssh config and do not share it.

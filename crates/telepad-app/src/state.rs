@@ -44,6 +44,10 @@ pub struct Model {
     pub update: UpdateState,
     /// Last "Public keys…" run: one result per host as they come in.
     pub key_run: Option<KeyRun>,
+    /// Open database windows.
+    pub db: Vec<crate::db::DbSession>,
+    /// Last database window id handed out.
+    pub db_next: crate::db::DbId,
 }
 
 /// A key added to / revoked from several hosts.
@@ -92,6 +96,8 @@ pub struct Drafts {
     pub paste: Option<PasteImport>,
     /// "Public keys…" window.
     pub keys: Option<KeysDraft>,
+    /// Form fields of each database window.
+    pub db: std::collections::BTreeMap<crate::db::DbId, crate::db::DbDraft>,
 }
 
 /// "Public keys…" window: the pasted key, the chosen hosts and the
@@ -164,6 +170,7 @@ impl Default for Drafts {
             run_info: None,
             paste: None,
             keys: None,
+            db: Default::default(),
         }
     }
 }

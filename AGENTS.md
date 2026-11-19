@@ -45,12 +45,13 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 |---|---|
 | `src/lib.rs` | Workspace: find `config` / `telepad.db`, first-run import, `.env` fallback key, `open_ssh_alias` |
 | `src/config.rs` | OpenSSH config import/export: hosts (alias, HostName, User, Port, IdentityFile, description, other options, not-monitored tag, RDP-only tag) + global `Host *`/`Match` text; renders the file `ssh -F` reads |
-| `src/store.rs` | SQLite inventory (`rusqlite`, bundled): `hosts` + `settings` tables, `PRAGMA user_version` schema version, transactional import (Merge/Replace), `parse_pasted` (pasted config / JSON / `[alias] [user@]host[:port]` lines), JSON + OpenSSH export, generated `telepad.ssh_config` (atomic write) |
+| `src/store.rs` | SQLite inventory (`rusqlite`, bundled): `hosts` + `settings` + `db_connections` (saved database connections, no passwords) tables, `PRAGMA user_version` schema version, transactional import (Merge/Replace), `parse_pasted` (pasted config / JSON / `[alias] [user@]host[:port]` lines), JSON + OpenSSH export, generated `telepad.ssh_config` (atomic write) |
 | `src/collector.rs` | Runs `ssh -F <config> -T -o BatchMode=yes ... <alias> sh -s` with `script.sh` on stdin; `Scope` (which tiers, ping first for hosts without ping reply) and `carry_over` of skipped facts; timeouts; bounded worker pool; sends `Update`s over a channel; RDP-only hosts get ping + TCP probe |
 | `src/script.sh` | Remote read-only collection script, `===SECTION===` markers; tiers `TP_STATIC` (daily) / `TP_SLOW` (6 h) switched by `collector::Scope`, live sections every round |
 | `src/bmc_setup.sh` | Interactive, user-started BMC (`ipmitool`) setup — see Conventions |
 | `src/parse.rs` | Pure parsers for each section, unit-tested against `tests/fixtures/` |
 | `src/authorized_keys.rs` | Public keys window backend: validate a pasted key (type, base64, embedded type), SHA256 fingerprint, add/revoke script for `~/.ssh/authorized_keys`, lockout guard (`login_keys`), parallel `apply_all` |
+| `src/db/` | Database browser (#52–#54): `detect` (DB containers / host listeners → `DbTarget`, user from container env), `tunnel` (`ssh -N -L`, closed on drop and by `close_all` on exit), `client` (`Session`: MySQL `mysql` / PostgreSQL `postgres` drivers, metadata, pages, queries, transactional row edits, DDL, cancel; live tests via `TELEPAD_TEST_MYSQL` / `TELEPAD_TEST_PG`), `sql` (quoting, statement split, danger / read-only checks, row SQL), `ddl` (structure editor SQL), `secret` (OS password store) |
 | `src/docker_actions.rs` | Docker/compose action commands + terminal script (show, confirm, run), read-only "How it runs" (`docker inspect` → `docker run`, compose files, secrets masked) |
 | `src/cluster.rs` | Docker Swarm (managers) and Kubernetes (kubectl / k3s / microk8s) model + parsers for `===SWARM===` / `===KUBE===`; cluster key so several managers show one cluster |
 | `src/eol.rs` | End-of-support dates per distribution release + date arithmetic (update when vendors publish new releases) |
@@ -66,7 +67,9 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 | `src/msg.rs` | `Msg` (user intents + results of effects) and `Effect` (work for the runtime) |
 | `src/table.rs` | Overview order: `Sort`/`SortKey`, `overview_rows` (filter + stable sort); `drop_index` / `can_reorder` (drag to reorder); `docker_stacks` (Docker overview by stack); host list `host_list_groups`, `worst_usage`; `fullest_disk`, `hottest` |
 | `src/update.rs` | `update(&mut State, Msg, now) -> Vec<Effect>` — the only place the model changes |
+| `src/db.rs` | Database windows: `DbSession` (model), `DbDraft` (form fields), `DbMsg` / `DbEffect` / `DbJob`, `update` for them, `post_statements` (grid edits → SQL) |
 | `src/tests.rs` | Behaviour tests for `update()` (no GUI, no database, no network) |
+| `src/tests_db.rs` | Behaviour tests for the database windows |
 
 ### telepad-gui
 
@@ -75,7 +78,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 | `src/main.rs` | Arguments, `--open-ssh`; no console window in Windows release builds |
 | `src/app.rs` | eframe app: each frame `runtime.frame()`, `views::draw()`, dispatch the returned `Msg`s |
 | `src/runtime.rs` | Executes `Effect`s (database, ssh, collector, update threads, dialogs, clipboard read/write via `arboard`, OS) and feeds results back as `Msg`s |
-| `src/views/` | One module per screen: `panels` (top bar, status bar, host list), `overview`, `detail`, `sensors`, `docker`, `docker_overview`, `ports`, `editor`, `import`, `keys`, `confirm`, `update_window` |
+| `src/views/` | One module per screen: `panels` (top bar, status bar, host list), `overview`, `detail`, `sensors`, `docker`, `docker_overview`, `ports`, `editor`, `import`, `keys`, `database` (one native window per connection), `confirm`, `update_window` |
 | `src/widgets.rs` | Shared drawing helpers and colours (bars, status dot, fan, thresholds) |
 | `src/icons.rs` | Phosphor icon font glyphs and OS logo detection; `assets/` holds the font and logos |
 | `assets/icon/` | App icon (`telepad.png` window icon, `.ico` exe/installer, `.icns` macOS app), generated by `scripts/make-icon.py` |
@@ -122,6 +125,12 @@ in `update()` with a test → run the effect in `runtime.rs` → draw/emit it in
   removes one validated public key in the login user's `~/.ssh/authorized_keys` on the chosen
   hosts, only after the user typed `add` / `revoke`; never from a refresh. It refuses to revoke
   the key Telepad logs in with, touches no other line, and rewrites the file via a temp copy.
+  Fourth exception, in-app (owner decision on #52–#54): the **database browser** (`db/`) changes
+  database rows and structure only after the user saw the exact SQL and clicked Run (DROP /
+  TRUNCATE: table name typed); grid edits post in one transaction, one row per statement. It
+  reaches databases only through `ssh -N -L` (never a direct database port), changes nothing on
+  the host, and stores passwords only in the OS password store (`keyring`), never in `telepad.db`.
+  New connections are editable; Read-only is a per-connection switch.
 - Remote script: POSIX `sh`, BusyBox-safe, every command guarded, `LC_ALL=C`.
 - New metric = new section in `script.sh` + parser + fixture test (core) + view.
 - OS-specific code only in `telepad-core/src/platform.rs` behind `#[cfg(target_os = ...)]`.
@@ -154,6 +163,7 @@ in `update()` with a test → run the effect in `runtime.rs` → draw/emit it in
 | Fallback key for hosts without IdentityFile | `SSH_IDENTITY_FILE` in `.env` next to `config` |
 | ssh binary override | `TELEPAD_SSH` env var (default: Windows `System32\OpenSSH\ssh.exe`, else `ssh`) |
 | View settings | `settings` table `ui_compact_host_list` / `ui_group_by_status` (host list toggles) |
+| Database connections | `db_connections` table (user, database, save-password and read-only flags per `DbTarget::key`); passwords in the OS password store (service "Telepad database") |
 | Update source | `settings` table `update_enabled` / `update_repo` / `update_auto_install` (☰ ▸ Software update…); check via the github.com `releases/latest` redirect (API only as fallback: 60 req/h per IP); default `yohannaftali/telepad` |
 
 `.env`, `config`, `telepad.db` and `telepad.ssh_config` are git-ignored: never commit an inventory.
@@ -205,3 +215,6 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #43 | feat(ui): reorder hosts by drag and drop in host list and overview table | closed | 2026-11-18 |
 | #45 | fix(store): Merge import puts new hosts between existing ones | closed | 2026-11-18 |
 | #49 | feat(keys): add or revoke an SSH public key on selected servers | closed | 2026-11-18 |
+| #52 | feat(db): HeidiSQL-style database browser — connect, browse tables and run queries | ready-for-review | 2026-11-19 |
+| #53 | feat(db): edit, insert and delete rows in the database Data grid | ready-for-review | 2026-11-19 |
+| #54 | feat(db): edit table structure — columns, indexes, foreign keys | ready-for-review | 2026-11-19 |

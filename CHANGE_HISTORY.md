@@ -2,6 +2,36 @@
 
 Newest first.
 
+## [2026-11-19] — feat(db): HeidiSQL-style database browser (#52, #53, #54)
+- Issues #52, #53 and #54 addressed on GitHub (one branch, `52-db-browser`).
+- Core `db/`: detection of database containers / host listeners, `ssh -N -L` tunnel
+  (closed on drop and on exit), `Session` on the `mysql` 28 / `postgres` 0.19 drivers
+  (databases, schemas, tables, structure, pages, queries with cancel, transactional row
+  edits with a one-row check, DDL), SQL helpers (quoting, statement split, danger and
+  read-only checks), structure editor SQL (`ddl`), OS password store (`keyring` 4).
+  `store`: schema v3, `db_connections` table (no passwords).
+- App: `db.rs` (sessions, drafts, `DbMsg` / `DbEffect` / `DbJob`), 13 `update()` tests.
+- GUI: `views/database.rs` (native window per connection: login, tree, Host / Database /
+  Table / Data / Query tabs, structure editor, confirmations, value viewer), runtime worker
+  thread per connection, **Open database…** in the container menu and host header.
+- CI: `db-live` job with MariaDB 11 and PostgreSQL 17 service containers.
+- Docs: USER_MANUAL (Database browser), README, SECURITY, AGENTS (fourth write exception).
+- Verified: fmt, clippy, all tests; live tests against MariaDB 11, MySQL 8.4 and
+  PostgreSQL 17 containers; GUI end to end through a local SSH lab container (made-up
+  data): detection, user from container env, saved password (Windows Credential Manager,
+  not in telepad.db), tree, data grid, edit / insert / post, invalid value error, Read-only,
+  dangerous-query confirmation, run current statement, structure add column, typed-name
+  confirmation, tunnel closed with the window and on exit. Not verified: macOS Keychain and
+  Linux Secret Service (CI builds only), real hosts.
+
+## [2026-11-19] — Milestone "Database browser (HeidiSQL-style)" (#52, #53, #54)
+- Milestone 1 created on GitHub; the database browser split into three issues, all `enhancement`
+- #52 feat(db): HeidiSQL-style database browser — connect, browse tables and run queries
+  (scope: core `db` module — detection, SSH tunnel, drivers —, app, gui, docs)
+- #53 feat(db): edit, insert and delete rows in the database Data grid (depends on #52)
+- #54 feat(db): edit table structure — columns, indexes, foreign keys (depends on #52)
+- Owner decisions: new connections editable; always over SSH; saved connections, password optionally in the OS secure store (`keyring`)
+
 ## [2026-11-18] — Telepad 0.7.1
 - New: **☰ → Public keys… (add / revoke)**: add or revoke one SSH public key on many hosts
   at once, after a typed confirmation, with a result per host; refuses to revoke the key

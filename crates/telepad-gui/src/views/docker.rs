@@ -36,9 +36,29 @@ fn action_label(text: &str, destructive: bool) -> RichText {
 }
 
 /// Actions for one container (menu).
-pub fn container_menu(ui: &mut egui::Ui, c: &Container, host: usize, out: &mut Vec<Msg>) {
+pub fn container_menu(
+    ui: &mut egui::Ui,
+    c: &Container,
+    host: usize,
+    alias: &str,
+    out: &mut Vec<Msg>,
+) {
     ui.menu_button(icons::MENU, |ui| {
         ui.label(RichText::new(&c.name).strong());
+        if let Some(t) = telepad_core::db::detect::container_target(alias, c) {
+            if ui
+                .button(il(icons::DATABASE, "Open database…"))
+                .on_hover_text(format!(
+                    "{} through the SSH login of {alias} — tables, data, queries",
+                    t.engine.title()
+                ))
+                .clicked()
+            {
+                out.push(Msg::Db(telepad_app::db::DbMsg::Open(t)));
+                ui.close();
+            }
+            ui.separator();
+        }
         ui.label(RichText::new(TERMINAL_HINT).weak().small());
         ui.separator();
         for action in ContainerAction::ALL {
@@ -241,6 +261,7 @@ pub fn docker_stacks(
     ui: &mut egui::Ui,
     r: &HostReport,
     host: usize,
+    alias: &str,
     address: &str,
     out: &mut Vec<Msg>,
 ) {
@@ -342,7 +363,7 @@ pub fn docker_stacks(
                         let (published, internal) = container_ports(c);
                         ui.label(RichText::new(published).monospace());
                         ui.label(RichText::new(internal).monospace().weak());
-                        container_menu(ui, c, host, out);
+                        container_menu(ui, c, host, alias, out);
                         ui.end_row();
                     }
                 });

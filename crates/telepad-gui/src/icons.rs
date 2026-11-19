@@ -41,6 +41,22 @@ pub const CARET_UP: &str = "\u{e13c}";
 pub const CARET_RIGHT: &str = "\u{e13a}";
 pub const DOT: &str = "\u{e18a}";
 pub const WINDOWS: &str = "\u{e692}";
+// Database window.
+pub const TABLE: &str = "\u{e476}";
+pub const PLAY: &str = "\u{e3d0}";
+pub const STOP: &str = "\u{e46c}";
+pub const LOCK: &str = "\u{e2fa}";
+pub const LOCK_OPEN: &str = "\u{e306}";
+pub const CARET_LEFT: &str = "\u{e138}";
+pub const EYE: &str = "\u{e220}";
+pub const UNDO: &str = "\u{e038}";
+pub const CODE: &str = "\u{e1bc}";
+pub const ROWS: &str = "\u{e5a2}";
+pub const FUNNEL: &str = "\u{e266}";
+pub const FOLDER: &str = "\u{e24a}";
+pub const CHECK: &str = "\u{e182}";
+pub const MINUS: &str = "\u{e32a}";
+pub const ROW_PLUS: &str = "\u{e59e}";
 
 /// Add Phosphor as a fallback font so icon codepoints render in any text.
 pub fn install(ctx: &egui::Context) {
@@ -386,6 +402,21 @@ mod tests {
             CARET_RIGHT,
             DOT,
             WINDOWS,
+            TABLE,
+            PLAY,
+            STOP,
+            LOCK,
+            LOCK_OPEN,
+            CARET_LEFT,
+            EYE,
+            UNDO,
+            CODE,
+            ROWS,
+            FUNNEL,
+            FOLDER,
+            CHECK,
+            MINUS,
+            ROW_PLUS,
         ] {
             for c in icon.chars() {
                 used.entry(c).or_insert_with(|| "icons.rs".to_string());
