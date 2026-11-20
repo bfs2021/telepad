@@ -1,15 +1,19 @@
-//! File windows (#62, #63): one per host, the local computer on the left and
-//! the host on the right, with a transfer queue and file operations (new,
-//! rename, delete, permissions, properties). Pure state and update logic; the
-//! runtime does the listing, copying and changing.
+//! File windows (#62–#64): one per host, the local computer on the left and
+//! the host on the right, with a transfer queue, file operations (new,
+//! rename, delete, permissions, properties) and an editor window
+//! ([`crate::editor`]). Pure state and update logic; the runtime does the
+//! listing, copying, changing, loading and saving.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::Instant;
 
 use telepad_core::config::HostEntry;
+use telepad_core::files::edit::Stamp;
 use telepad_core::files::ops::{Measure, Report, check_name};
 use telepad_core::files::transfer::{Decision, Direction, Event, Item, Source};
 use telepad_core::files::{Entry, Kind, local_join, local_parent, sftp};
+
+use crate::editor::{EdDraft, EdMsg, FileEditor, Load, TabId, Unsaved, has_unsaved};
 
 pub type FmId = u64;
 
@@ -153,6 +157,8 @@ pub enum OpKind {
     Properties,
     /// Host side only: mode of the selected items.
     Permissions,
+    /// F4 (one selected file): open it in the editor.
+    Edit,
 }
 
 /// The dialog open in a file window.
@@ -249,6 +255,8 @@ pub struct FileSession {
     pub dialog: Option<Dialog>,
     /// Errors of the last delete / permission change (one line per item).
     pub op_errors: Vec<String>,
+    /// The editor window's tabs (#64).
+    pub editor: FileEditor,
     next_transfer: u64,
 }
 
@@ -295,6 +303,8 @@ pub struct FileDraft {
     pub mode_text: String,
     /// Permissions dialog: also everything inside folders.
     pub recursive: bool,
+    /// The editor's texts and find bar.
+    pub editor: EdDraft,
 }
 
 impl FileDraft {
@@ -440,6 +450,11 @@ pub enum FmMsg {
         side: Side,
     },
     DismissErrors(FmId),
+    /// The editor window (#64).
+    Editor {
+        id: FmId,
+        msg: EdMsg,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -507,6 +522,24 @@ pub enum FmEffect {
         op: FileOp,
     },
     CopyText(String),
+    /// Read and decode a file for the editor → [`EdMsg::Loaded`].
+    Load {
+        id: FmId,
+        tab: TabId,
+        side: Side,
+        path: String,
+        load: Load,
+    },
+    /// Write a file of the editor (only if it still has `expect`, when given)
+    /// → [`EdMsg::Saved`].
+    Save {
+        id: FmId,
+        tab: TabId,
+        side: Side,
+        path: String,
+        bytes: Vec<u8>,
+        expect: Option<Stamp>,
+    },
 }
 
 fn list(fx: &mut Vec<FmEffect>, s: &mut FileSession, d: &mut FileDraft, side: Side, path: String) {
@@ -686,26 +719,28 @@ pub fn update(
     let Some(pos) = sessions.iter().position(|s| s.id == id) else {
         return fx;
     };
+    if let FmMsg::Editor { msg, .. } = msg {
+        let d = drafts.entry(id).or_default();
+        if crate::editor::update(&mut sessions[pos], d, msg, &mut fx) {
+            close_session(sessions, drafts, pos, &mut fx);
+        }
+        return fx;
+    }
     if let FmMsg::Close(_) = msg {
-        let s = sessions.remove(pos);
-        drafts.remove(&id);
-        if s.status == Status::Ready {
-            fx.push(FmEffect::SavePaths {
-                alias: s.host.alias.clone(),
-                local: s.local.path.clone(),
-                remote: s.remote.path.clone(),
-            });
+        // Unsaved editor tabs: ask first (the window stays open).
+        let d = drafts.entry(id).or_default();
+        let s = &mut sessions[pos];
+        if has_unsaved(&s.editor, &d.editor) {
+            s.editor.ask = Some(Unsaved::All { window: true });
+            return fx;
         }
-        for t in s.transfers.iter().filter(|t| !t.state.finished()) {
-            fx.push(FmEffect::Cancel { id, transfer: t.id });
-        }
-        fx.push(FmEffect::Close(id));
+        close_session(sessions, drafts, pos, &mut fx);
         return fx;
     }
     let s = &mut sessions[pos];
     let d = drafts.entry(id).or_default();
     match msg {
-        FmMsg::Open(_) | FmMsg::Close(_) => {}
+        FmMsg::Open(_) | FmMsg::Close(_) | FmMsg::Editor { .. } => {}
         FmMsg::Connected {
             result, local_home, ..
         } => match result {
@@ -1062,6 +1097,28 @@ pub fn update(
     fx
 }
 
+fn close_session(
+    sessions: &mut Vec<FileSession>,
+    drafts: &mut BTreeMap<FmId, FileDraft>,
+    pos: usize,
+    fx: &mut Vec<FmEffect>,
+) {
+    let s = sessions.remove(pos);
+    let id = s.id;
+    drafts.remove(&id);
+    if s.status == Status::Ready {
+        fx.push(FmEffect::SavePaths {
+            alias: s.host.alias.clone(),
+            local: s.local.path.clone(),
+            remote: s.remote.path.clone(),
+        });
+    }
+    for t in s.transfers.iter().filter(|t| !t.state.finished()) {
+        fx.push(FmEffect::Cancel { id, transfer: t.id });
+    }
+    fx.push(FmEffect::Close(id));
+}
+
 /// Why `op` cannot run on `side` now (with `sel` items selected), if it cannot.
 pub fn op_blocked(s: &FileSession, sel: usize, side: Side, op: OpKind) -> Option<&'static str> {
     if s.status != Status::Ready {
@@ -1076,6 +1133,7 @@ pub fn op_blocked(s: &FileSession, sel: usize, side: Side, op: OpKind) -> Option
     match op {
         OpKind::NewFolder | OpKind::NewFile => None,
         OpKind::Rename | OpKind::Properties if sel != 1 => Some("Select one item"),
+        OpKind::Edit if sel != 1 => Some("Select one file"),
         OpKind::Delete if sel == 0 => Some("Select items first"),
         OpKind::Permissions if side == Side::Local => Some("Host side only"),
         OpKind::Permissions if sel == 0 => Some("Select items first"),
@@ -1115,6 +1173,12 @@ fn file_measure(e: &Entry) -> Measure {
 fn ask(s: &mut FileSession, d: &mut FileDraft, side: Side, op: OpKind, fx: &mut Vec<FmEffect>) {
     let items = selected_entries(s, d, side);
     if op_blocked(s, items.len(), side, op).is_some() {
+        return;
+    }
+    if op == OpKind::Edit {
+        d.active = Some(side);
+        let name = items[0].name.clone();
+        crate::editor::update(s, d, EdMsg::Open { side, name }, fx);
         return;
     }
     let id = s.id;
@@ -1159,6 +1223,7 @@ fn ask(s: &mut FileSession, d: &mut FileDraft, side: Side, op: OpKind, fx: &mut 
                 measure,
             }
         }
+        OpKind::Edit => return,
         OpKind::Permissions => {
             d.mode = items.iter().find_map(|e| e.perm).unwrap_or(0o644) & 0o7777;
             d.mode_text = format!("{:o}", d.mode);
@@ -1276,7 +1341,8 @@ fn msg_id(m: &FmMsg) -> FmId {
         | Ask { id, .. }
         | Measured { id, .. }
         | OpDone { id, .. }
-        | CopyPath { id, .. } => *id,
+        | CopyPath { id, .. }
+        | Editor { id, .. } => *id,
         Retry(id) | Close(id) | AskCancel(id) | ClearFinished(id) | Confirm(id)
         | CloseDialog(id) | DismissErrors(id) => *id,
     }

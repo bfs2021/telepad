@@ -10,6 +10,7 @@ repository.workspace = true
 keyring = "4.2.0"
 mysql = { version = "28.0.4", default-features = false, features = ["minimal-rust"] }
 postgres = "0.19.14"
+regex.workspace = true
 rusqlite.workspace = true
 self-replace.workspace = true
 semver.workspace = true

@@ -7,11 +7,16 @@
 //! - [`rsync`]: optional rsync mode when both sides have rsync.
 //! - [`ops`]: new folder / file, rename, delete, permissions, sizes (#63).
 //! - [`transfer`]: plan (expand folders, find files that exist) and run copies.
+//! - [`edit`], [`text`], [`syntax`]: the editor (#64): load / save with a
+//!   changed-on-disk check, line endings and find / replace, syntax colours.
 
+pub mod edit;
 pub mod fallback;
 pub mod ops;
 pub mod rsync;
 pub mod sftp;
+pub mod syntax;
+pub mod text;
 pub mod transfer;
 
 use std::path::{Path, PathBuf};

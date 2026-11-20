@@ -3868,6 +3868,7 @@ dependencies = [
  "keyring",
  "mysql",
  "postgres",
+ "regex",
  "rusqlite",
  "self-replace",
  "semver",

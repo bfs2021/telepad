@@ -1,13 +1,15 @@
-//! File windows (#62, #63): WinSCP-style, this computer on the left and the
-//! host on the right, transfer queue at the bottom; new / rename / delete /
-//! permissions / properties from each pane's toolbar, right-click menu and
-//! keys (F7, F2, Del). One native window per host.
+//! File windows (#62–#64): WinSCP-style, this computer on the left and the
+//! host on the right, transfer queue at the bottom; edit / new / rename /
+//! delete / permissions / properties from each pane's toolbar, right-click
+//! menu and keys (F4, F7, F2, Del). One native window per host, plus its
+//! editor window ([`super::text_editor`]).
 
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 use eframe::egui::{self, Color32, RichText};
 use egui_extras::{Column, TableBuilder};
+use telepad_app::editor::{EdMsg, has_unsaved};
 use telepad_app::files::{
     DialogKind, FileDraft, FileSession, FmMsg, Mode, OpKind, Pane, Side, SortCol, Status, TState,
     op_blocked, other, parse_mode,
@@ -42,7 +44,7 @@ struct DragFiles {
     names: Vec<String>,
 }
 
-fn window_icon() -> Option<Arc<egui::IconData>> {
+pub(super) fn window_icon() -> Option<Arc<egui::IconData>> {
     static ICON: OnceLock<Option<Arc<egui::IconData>>> = OnceLock::new();
     ICON.get_or_init(|| {
         eframe::icon_data::from_png_bytes(include_bytes!("../../assets/icon/telepad.png"))
@@ -59,6 +61,21 @@ pub fn file_windows(
     out: &mut Vec<Msg>,
     now: Instant,
 ) {
+    // Telepad itself closing with unsaved editor tabs: ask in each editor first.
+    if ctx.input(|i| i.viewport().close_requested()) {
+        let mut ask = false;
+        for s in &m.files {
+            if let Some(dr) = d.files.get(&s.id)
+                && has_unsaved(&s.editor, &dr.editor)
+            {
+                ask = true;
+                send(out, FmMsg::Close(s.id));
+            }
+        }
+        if ask {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+    }
     for s in &m.files {
         let Some(dr) = d.files.get_mut(&s.id) else {
             continue;
@@ -73,12 +90,18 @@ pub fn file_windows(
         let vid = egui::ViewportId::from_hash_of(("telepad-files", s.id));
         ctx.show_viewport_immediate(vid, builder, |ui, _| {
             if ui.input(|i| i.viewport().close_requested()) {
+                // Unsaved editor tabs: the question opens in the editor first.
+                if has_unsaved(&s.editor, &dr.editor) {
+                    ui.ctx()
+                        .send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                }
                 send(out, FmMsg::Close(s.id));
             }
             window(ui, s, dr, out, now);
             ask(ui, s, dr, out);
             dialog(ui, s, dr, out);
         });
+        super::text_editor::editor_window(ctx, s, dr, out);
     }
 }
 
@@ -150,7 +173,9 @@ fn window(ui: &mut egui::Ui, s: &FileSession, d: &mut FileDraft, out: &mut Vec<M
             && let Some(side) = d.active
         {
             let key = |k| ui.input(|i| i.key_pressed(k));
-            let op = if key(egui::Key::F7) {
+            let op = if key(egui::Key::F4) {
+                Some(OpKind::Edit)
+            } else if key(egui::Key::F7) {
                 Some(OpKind::NewFolder)
             } else if key(egui::Key::F2) {
                 Some(OpKind::Rename)
@@ -508,6 +533,18 @@ fn table(
                             name: e.name.clone(),
                         },
                     );
+                } else if e.kind != Kind::Other {
+                    d.active = Some(side);
+                    send(
+                        out,
+                        FmMsg::Editor {
+                            id,
+                            msg: EdMsg::Open {
+                                side,
+                                name: e.name.clone(),
+                            },
+                        },
+                    );
                 }
             } else if name_resp.clicked() {
                 d.active = Some(side);
@@ -757,6 +794,12 @@ fn ask(ui: &mut egui::Ui, s: &FileSession, d: &mut FileDraft, out: &mut Vec<Msg>
 /// The operations of one pane: (op, icon, label, hint).
 fn ops_for(side: Side) -> Vec<(OpKind, &'static str, &'static str, &'static str)> {
     let mut v = vec![
+        (
+            OpKind::Edit,
+            icons::CODE,
+            "Edit",
+            "Open in the editor (F4, or double-click)",
+        ),
         (OpKind::NewFolder, icons::PLUS, "Folder", "New folder (F7)"),
         (OpKind::NewFile, icons::PLUS, "File", "New empty file"),
         (OpKind::Rename, icons::EDIT, "Rename", "Rename (F2)"),

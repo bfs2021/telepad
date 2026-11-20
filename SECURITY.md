@@ -35,6 +35,9 @@ Only the latest release is supported.
   only from the file window's dialogs (delete after a confirmation that lists the items),
   with the login user's rights (no `sudo`); names are checked to be one path element,
   renames never replace a file, and recursive delete / permission changes never follow links.
+  The editor saves a file only on Save (Ctrl+S, or Save in the unsaved-changes question),
+  via `<name>.telepad-part` and a rename, keeping the file's mode; it refuses to write over
+  a file that changed since it was loaded unless the user clicks Overwrite.
 - New host keys are accepted on first connect (`StrictHostKeyChecking=accept-new`);
   a **changed** host key is rejected, as with plain ssh.
 - Host fields are validated before they are saved, because the database is rendered

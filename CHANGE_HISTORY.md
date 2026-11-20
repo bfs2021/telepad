@@ -2,6 +2,36 @@
 
 Newest first.
 
+## [2026-11-20] — feat(files): built-in VS Code-like editor for local and remote files (#64)
+- Issue #64 addressed on GitHub (branch `64-editor`).
+- Core: `files/text.rs` (decode / encode keeping CRLF, BOM and the final newline; binary,
+  non-UTF-8 and > 10 MiB refused with the reason; find / replace with match case, whole word,
+  regex, `$1` groups even before `_`; go to line; indent / outdent), `files/syntax.rs`
+  (language by file name, folder and `#!`; small line lexer for shell, YAML, JSON, TOML,
+  INI / conf, .env, Dockerfile, nginx, Python, JavaScript, TypeScript, PHP, SQL, Markdown,
+  Rust), `files/edit.rs` (read / save locally and over SFTP: `.telepad-part` + rename, mode
+  and owner kept, links followed, `Stamp` size / mtime check → `SaveError::Changed`).
+  New dependency `regex` 1.13.2.
+- App `editor.rs`: tabs per file window, dirty state from the draft text, one save at a time,
+  conflict (Overwrite / Reload / Show diff via `hostsync::line_diff`), unsaved-changes
+  question for a tab, the editor window, the file window and Telepad; `OpKind::Edit` (F4),
+  `FmMsg::Editor`, `FmEffect::Load` / `Save` (run on the window's worker / SFTP connection).
+  7 `update()` tests.
+- GUI `views/text_editor.rs`: editor window with tab bar (unsaved ●), path, find / replace /
+  go-to-line bar, conflict box with diff, status bar (Ln / Col, indentation, language menu,
+  LF / CRLF, UTF-8 / BOM), line-number gutter fixed when scrolling sideways, current line,
+  match highlights, VS Code Dark+ / Light+ colours; double-click / Edit / F4 in the panes.
+- Docs: USER_MANUAL "Editor", README, SECURITY, AGENTS.
+- Verified: fmt, clippy, all tests (text / syntax / edit unit tests, live SFTP test: CRLF
+  round trip, mode 640 kept, no part file left, changed-on-host refusal, save through a
+  link, binary refused); GUI on Windows 11 (second monitor, throwaway workspace, lab
+  container and a scratch folder): open by double-click and F4, colours (YAML, nginx,
+  shell), unsaved dot, save, conflict box + diff + Reload + Overwrite, find / replace (regex,
+  `$2_$1`, replace one / all), Esc, undo, go to line 2500, Tab indent, binary file refused,
+  unsaved question on tab close / file window close / Telepad close (Save, Don't save,
+  Cancel), local CRLF file kept CRLF, light theme. Not verified here: the Unix-only local
+  test (mode and link), which runs on Linux / macOS CI.
+
 ## [2026-11-20] — Tested and merged: file operations (#63)
 - PR #68 merged (CI green on Windows, macOS, Linux, `db-live`, `files-live`); issue closed.
 - Tested on Windows 11 against local lab containers (SFTP and no-SFTP), throwaway database
