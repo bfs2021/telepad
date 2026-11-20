@@ -2,6 +2,13 @@
 
 Newest first.
 
+## [2026-11-20] — Tested and merged: file operations (#63)
+- PR #68 merged (CI green on Windows, macOS, Linux, `db-live`, `files-live`); issue closed.
+- Tested on Windows 11 against local lab containers (SFTP and no-SFTP), throwaway database
+  and scratch folders: new / rename / delete / properties / permissions / copy path on both
+  sides, per-item errors, keys ignored while typing in a field.
+- Fixed while testing: a Unix test looked inside a folder after removing its x bit.
+
 ## [2026-11-20] — feat(files): file operations — new, rename, delete, permissions (#63)
 - Issue #63 addressed on GitHub (branch `63-file-operations`).
 - Core `files/ops.rs`: `Fs` trait (`LocalFs`, `Sftp`), `check_name` (one path element;
