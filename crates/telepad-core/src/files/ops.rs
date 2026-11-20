@@ -530,6 +530,9 @@ mod tests {
         std::os::unix::fs::symlink(&keep, tree.join("to-keep")).unwrap();
         let mut fs = LocalFs;
         let cancel = AtomicBool::new(false);
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let keep_before = mode(&keep);
 
         let t = entry(&mut fs, &dir, "tree");
         let r = chmod(
@@ -541,13 +544,12 @@ mod tests {
             &cancel,
         );
         assert!(r.errors.is_empty(), "{:?}", r.errors);
-        use std::os::unix::fs::PermissionsExt;
-        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode(&tree), 0o640);
+        // Without x on `tree` nothing inside can be looked at: give it back first.
+        std::fs::set_permissions(&tree, std::fs::Permissions::from_mode(0o755)).unwrap();
         assert_eq!(mode(&tree.join("sub")), 0o750);
         assert_eq!(mode(&tree.join("sub").join("f")), 0o640);
-        assert_eq!(mode(&keep), 0o755 & mode(&keep), "link target untouched");
-        std::fs::set_permissions(&tree, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(mode(&keep), keep_before, "link target untouched");
 
         let r = delete(&mut fs, &dir, &[t], &cancel);
         assert!(r.errors.is_empty(), "{:?}", r.errors);
