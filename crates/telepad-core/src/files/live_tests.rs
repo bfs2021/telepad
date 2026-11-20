@@ -303,3 +303,126 @@ fn rsync_when_both_sides_have_it() {
     c.rmdir(&sftp::join(&home, "site")).unwrap();
     let _ = std::fs::remove_dir_all(&src);
 }
+
+/// Run a command on the lab host (test setup only).
+fn lab_sh(s: &SshSettings, host: &HostEntry, cmd: &str) {
+    let st = std::process::Command::new(&s.ssh_program)
+        .arg("-F")
+        .arg(&s.config_path)
+        .args(["-n", "-o", "BatchMode=yes", &host.alias, cmd])
+        .status()
+        .unwrap();
+    assert!(st.success(), "{cmd}");
+}
+
+#[test]
+fn sftp_file_operations_new_rename_chmod_measure_delete() {
+    use super::ops::{self, Measure};
+    let Some((s, host, _)) = lab() else {
+        eprintln!("TELEPAD_TEST_SSH not set: skipped");
+        return;
+    };
+    let mut c = Sftp::connect(&s, &host).unwrap();
+    let home = c.realpath(".").unwrap();
+    let cancel = AtomicBool::new(false);
+    let find = |c: &mut Sftp, dir: &str, name: &str| {
+        c.list(dir)
+            .unwrap()
+            .into_iter()
+            .find(|e| e.name == name)
+            .unwrap()
+    };
+    // Clean a leftover of an earlier failed run.
+    if let Ok(Some(e)) = c
+        .list(&home)
+        .map(|v| v.into_iter().find(|e| e.name == "ops ü 'test'"))
+    {
+        let _ = ops::Fs::chmod(&mut c, &sftp::join(&home, &e.name), 0o755);
+        ops::delete(&mut c, &home, &[e], &cancel);
+    }
+
+    let base = ops::new_folder(&mut c, &home, "ops ü 'test'", false).unwrap();
+    assert!(
+        ops::new_folder(&mut c, &home, "ops ü 'test'", false)
+            .unwrap_err()
+            .contains("exists")
+    );
+    assert!(ops::new_folder(&mut c, &base, "../escape", false).is_err());
+    ops::new_file(&mut c, &base, "a \"b\".txt", false).unwrap();
+    assert!(ops::new_file(&mut c, &base, "a \"b\".txt", false).is_err());
+    ops::new_folder(&mut c, &base, "sub", false).unwrap();
+    ops::new_file(&mut c, &sftp::join(&base, "sub"), "f", false).unwrap();
+    // A link to a folder outside the tree: never followed by delete / chmod.
+    lab_sh(
+        &s,
+        &host,
+        "mkdir -p ~/ops-keep && touch ~/ops-keep/precious && chmod 755 ~/ops-keep",
+    );
+    lab_sh(
+        &s,
+        &host,
+        "ln -s ~/ops-keep \"$HOME/ops ü 'test'/sub/to-keep\"",
+    );
+
+    ops::rename(&mut c, &base, "a \"b\".txt", "renamed ü.txt", false).unwrap();
+    assert!(
+        ops::rename(&mut c, &base, "renamed ü.txt", "sub", false)
+            .unwrap_err()
+            .contains("exists")
+    );
+    let names: Vec<String> = c.list(&base).unwrap().into_iter().map(|e| e.name).collect();
+    assert!(names.contains(&"renamed ü.txt".to_string()), "{names:?}");
+
+    let e = find(&mut c, &home, "ops ü 'test'");
+    assert_eq!(
+        ops::measure(&mut c, &home, std::slice::from_ref(&e), &cancel)[0],
+        Measure {
+            files: 3,
+            dirs: 2,
+            bytes: c
+                .lstat(&sftp::join(&sftp::join(&base, "sub"), "to-keep"))
+                .unwrap()
+                .size
+                .unwrap(),
+            partial: false
+        }
+    );
+
+    let r = ops::chmod(
+        &mut c,
+        &home,
+        std::slice::from_ref(&e),
+        0o640,
+        true,
+        &cancel,
+    );
+    assert!(r.errors.is_empty(), "{:?}", r.errors);
+    let perm = |c: &mut Sftp, p: &str| c.stat(p).unwrap().perm.unwrap() & 0o777;
+    assert_eq!(perm(&mut c, &base), 0o640);
+    // Without x the folder cannot be entered: give it back to look inside.
+    ops::chmod(
+        &mut c,
+        &home,
+        std::slice::from_ref(&e),
+        0o750,
+        false,
+        &cancel,
+    );
+    assert_eq!(perm(&mut c, &sftp::join(&base, "sub")), 0o750);
+    assert_eq!(
+        perm(&mut c, &sftp::join(&sftp::join(&base, "sub"), "f")),
+        0o640
+    );
+    assert_eq!(perm(&mut c, &sftp::join(&home, "ops-keep")), 0o755);
+
+    let e = find(&mut c, &home, "ops ü 'test'");
+    let r = ops::delete(&mut c, &home, &[e], &cancel);
+    assert_eq!(r.errors, Vec::<String>::new());
+    assert_eq!(r.done, 1);
+    assert!(c.lstat(&base).is_err());
+    assert!(
+        c.lstat(&sftp::join(&sftp::join(&home, "ops-keep"), "precious"))
+            .is_ok()
+    );
+    lab_sh(&s, &host, "rm -rf ~/ops-keep");
+}

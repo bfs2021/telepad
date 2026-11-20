@@ -5,9 +5,11 @@
 //! - [`fallback`]: hosts without an SFTP server — read-only listing with a
 //!   POSIX `sh` script, transfers with `scp -O`.
 //! - [`rsync`]: optional rsync mode when both sides have rsync.
+//! - [`ops`]: new folder / file, rename, delete, permissions, sizes (#63).
 //! - [`transfer`]: plan (expand folders, find files that exist) and run copies.
 
 pub mod fallback;
+pub mod ops;
 pub mod rsync;
 pub mod sftp;
 pub mod transfer;
@@ -72,11 +74,18 @@ pub fn perm_text(perm: Option<u32>) -> String {
         return String::new();
     };
     let mut s = String::with_capacity(9);
-    for shift in [6, 3, 0] {
+    // setuid / setgid / sticky show as s / t in the x place (S / T without x), like `ls -l`.
+    for (shift, special, mark) in [(6, 0o4000, 's'), (3, 0o2000, 's'), (0, 0o1000, 't')] {
         let b = (p >> shift) & 7;
         s.push(if b & 4 != 0 { 'r' } else { '-' });
         s.push(if b & 2 != 0 { 'w' } else { '-' });
-        s.push(if b & 1 != 0 { 'x' } else { '-' });
+        let x = b & 1 != 0;
+        s.push(match (p & special != 0, x) {
+            (true, true) => mark,
+            (true, false) => mark.to_ascii_uppercase(),
+            (false, true) => 'x',
+            (false, false) => '-',
+        });
     }
     s
 }
@@ -222,6 +231,14 @@ pub fn local_path(dir: &str, name: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn special_bits_show_like_ls() {
+        assert_eq!(perm_text(Some(0o2755)), "rwxr-sr-x");
+        assert_eq!(perm_text(Some(0o1777)), "rwxrwxrwt");
+        assert_eq!(perm_text(Some(0o4644)), "rwSr--r--");
+        assert_eq!(perm_text(Some(0o644)), "rw-r--r--");
+    }
 
     #[test]
     fn owner_and_permissions_from_sftp() {

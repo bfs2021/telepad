@@ -49,6 +49,7 @@ pub const OPEN_READ: u32 = 0x1;
 pub const OPEN_WRITE: u32 = 0x2;
 pub const OPEN_CREATE: u32 = 0x8;
 pub const OPEN_TRUNCATE: u32 = 0x10;
+pub const OPEN_EXCL: u32 = 0x20;
 
 /// Bytes per READ / WRITE request and how many are in flight at once.
 const CHUNK: u32 = 32 * 1024;
@@ -502,6 +503,16 @@ impl Sftp {
             put_str(b, from.as_bytes());
             put_str(b, to.as_bytes());
         })
+    }
+
+    /// Create an empty file; fails when `path` already exists.
+    pub fn create_new(&mut self, path: &str) -> Result<(), String> {
+        let h = self.expect_handle(OPEN, |b| {
+            put_str(b, path.as_bytes());
+            put_u32(b, OPEN_WRITE | OPEN_CREATE | OPEN_EXCL);
+            Attrs::default().encode(b);
+        })?;
+        self.close(&h)
     }
 
     pub fn setstat(&mut self, path: &str, attrs: Attrs) -> Result<(), String> {

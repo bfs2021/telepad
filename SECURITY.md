@@ -31,7 +31,10 @@ Only the latest release is supported.
   same login as fallbacks; never `sudo`). An existing file is replaced only after the user
   chose Overwrite (or Newer only); copies go to a `.telepad-part` file that is renamed when
   complete. Uploads never copy Windows' file modes, so files are not made world-writable;
-  rsync runs a dry run first and never deletes.
+  rsync runs a dry run first and never deletes. New / rename / delete / permissions run
+  only from the file window's dialogs (delete after a confirmation that lists the items),
+  with the login user's rights (no `sudo`); names are checked to be one path element,
+  renames never replace a file, and recursive delete / permission changes never follow links.
 - New host keys are accepted on first connect (`StrictHostKeyChecking=accept-new`);
   a **changed** host key is rejected, as with plain ssh.
 - Host fields are validated before they are saved, because the database is rendered

@@ -633,3 +633,401 @@ fn connection_errors_can_be_retried() {
         "nothing to remember before it connected"
     );
 }
+
+// --- File operations (#63) ---
+
+fn select(s: &mut State, side: Side, names: &[&str]) {
+    let sel = draft(s).selected_mut(side);
+    sel.clear();
+    sel.extend(names.iter().map(|n| n.to_string()));
+}
+
+fn ops_of(fx: &[FmEffect]) -> Vec<(Side, FileOp)> {
+    fx.iter()
+        .filter_map(|e| match e {
+            FmEffect::Op { side, op, .. } => Some((*side, op.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn new_folder_checks_the_name_then_creates_and_selects_it() {
+    let (mut s, id) = opened(Mode::Sftp);
+    let side = Side::Remote;
+    send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side,
+            op: OpKind::NewFolder,
+        },
+    );
+    assert_eq!(fs(&s).dialog.as_ref().unwrap().kind, DialogKind::NewFolder);
+    // A second dialog cannot open on top.
+    assert!(op_blocked(fs(&s), 0, Side::Local, OpKind::NewFile).is_some());
+
+    for bad in ["", "..", "a/b"] {
+        draft(&mut s).name = bad.into();
+        assert!(
+            ops_of(&send(&mut s, FmMsg::Confirm(id))).is_empty(),
+            "{bad:?}"
+        );
+        assert!(fs(&s).dialog.as_ref().unwrap().error.is_some());
+    }
+    draft(&mut s).name = "new 'dir' ü".into();
+    let fx = send(&mut s, FmMsg::Confirm(id));
+    assert_eq!(
+        ops_of(&fx),
+        vec![(
+            side,
+            FileOp::NewFolder {
+                dir: "/home/ops".into(),
+                name: "new 'dir' ü".into()
+            }
+        )]
+    );
+    assert!(fs(&s).dialog.as_ref().unwrap().busy);
+    assert!(
+        ops_of(&send(&mut s, FmMsg::Confirm(id))).is_empty(),
+        "no double submit"
+    );
+
+    // The host says no: the dialog stays with the reason.
+    send(
+        &mut s,
+        FmMsg::OpDone {
+            id,
+            side,
+            result: Err("new 'dir' ü already exists".into()),
+        },
+    );
+    let dl = fs(&s).dialog.as_ref().unwrap();
+    assert!(!dl.busy && dl.error.as_deref().unwrap().contains("exists"));
+
+    send(&mut s, FmMsg::Confirm(id));
+    let fx = send(
+        &mut s,
+        FmMsg::OpDone {
+            id,
+            side,
+            result: Ok((Default::default(), Some("new 'dir' ü".into()))),
+        },
+    );
+    assert!(fs(&s).dialog.is_none());
+    assert!(fx.iter().any(|e| matches!(
+        e,
+        FmEffect::List {
+            side: Side::Remote,
+            ..
+        }
+    )));
+    assert!(draft(&mut s).selected_remote.contains("new 'dir' ü"));
+}
+
+#[test]
+fn rename_needs_one_item_and_keeps_an_unchanged_name() {
+    let (mut s, id) = opened(Mode::Sftp);
+    let side = Side::Local;
+    select(&mut s, side, &["site", "notes.txt"]);
+    send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side,
+            op: OpKind::Rename,
+        },
+    );
+    assert!(fs(&s).dialog.is_none(), "two selected");
+    select(&mut s, side, &["notes.txt"]);
+    send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side,
+            op: OpKind::Rename,
+        },
+    );
+    assert_eq!(draft(&mut s).name, "notes.txt");
+    assert!(ops_of(&send(&mut s, FmMsg::Confirm(id))).is_empty());
+    assert!(fs(&s).dialog.is_none(), "same name: nothing to do");
+
+    send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side,
+            op: OpKind::Rename,
+        },
+    );
+    draft(&mut s).name = "notes 2.txt".into();
+    assert_eq!(
+        ops_of(&send(&mut s, FmMsg::Confirm(id))),
+        vec![(
+            side,
+            FileOp::Rename {
+                dir: "/home/me".into(),
+                from: "notes.txt".into(),
+                to: "notes 2.txt".into()
+            }
+        )]
+    );
+}
+
+#[test]
+fn delete_counts_folders_first_and_reports_per_item_errors() {
+    use telepad_core::files::ops::{Measure, Report};
+    let (mut s, id) = opened(Mode::Sftp);
+    let side = Side::Local;
+    send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side,
+            op: OpKind::Delete,
+        },
+    );
+    assert!(fs(&s).dialog.is_none(), "nothing selected");
+
+    select(&mut s, side, &["site", "notes.txt"]);
+    let fx = send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side,
+            op: OpKind::Delete,
+        },
+    );
+    assert!(
+        matches!(&ops_of(&fx)[..], [(Side::Local, FileOp::Measure { items, .. })] if items.len() == 2)
+    );
+    let counted = vec![
+        Measure {
+            files: 12,
+            dirs: 3,
+            bytes: 4096,
+            partial: false,
+        },
+        Measure {
+            files: 1,
+            bytes: 5,
+            ..Default::default()
+        },
+    ];
+    send(
+        &mut s,
+        FmMsg::Measured {
+            id,
+            side,
+            result: Ok(counted.clone()),
+        },
+    );
+    match &fs(&s).dialog.as_ref().unwrap().kind {
+        DialogKind::Delete { items, measure } => {
+            assert_eq!(items.len(), 2);
+            assert_eq!(measure, &Some(Ok(counted)));
+        }
+        k => panic!("{k:?}"),
+    }
+    let fx = send(&mut s, FmMsg::Confirm(id));
+    assert!(matches!(
+        &ops_of(&fx)[..],
+        [(Side::Local, FileOp::Delete { dir, items })] if dir == "/home/me" && items.len() == 2
+    ));
+
+    let fx = send(
+        &mut s,
+        FmMsg::OpDone {
+            id,
+            side,
+            result: Ok((
+                Report {
+                    done: 1,
+                    errors: vec!["/home/me/site/x: Permission denied".into()],
+                },
+                None,
+            )),
+        },
+    );
+    assert!(fs(&s).dialog.is_none());
+    assert_eq!(fs(&s).op_errors.len(), 1);
+    assert!(draft(&mut s).selected_local.is_empty());
+    assert!(fx.iter().any(|e| matches!(
+        e,
+        FmEffect::List {
+            side: Side::Local,
+            ..
+        }
+    )));
+    send(&mut s, FmMsg::DismissErrors(id));
+    assert!(fs(&s).op_errors.is_empty());
+}
+
+#[test]
+fn files_only_delete_needs_no_counting() {
+    let (mut s, id) = opened(Mode::Sftp);
+    select(&mut s, Side::Remote, &["notes.txt"]);
+    let fx = send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side: Side::Remote,
+            op: OpKind::Delete,
+        },
+    );
+    assert!(ops_of(&fx).is_empty());
+    assert!(matches!(
+        &fs(&s).dialog.as_ref().unwrap().kind,
+        DialogKind::Delete { measure: Some(Ok(m)), .. } if m[0].bytes == 9
+    ));
+}
+
+#[test]
+fn permissions_are_host_side_octal_and_optionally_recursive() {
+    let (mut s, id) = opened(Mode::Sftp);
+    select(&mut s, Side::Local, &["notes.txt"]);
+    send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side: Side::Local,
+            op: OpKind::Permissions,
+        },
+    );
+    assert!(
+        fs(&s).dialog.is_none(),
+        "this computer has no permissions dialog"
+    );
+
+    send(
+        &mut s,
+        FmMsg::Listed {
+            id,
+            side: Side::Remote,
+            result: Ok((
+                "/home/ops".into(),
+                vec![Entry {
+                    perm: Some(0o755),
+                    ..entry("logs", true, 0, 1)
+                }],
+            )),
+        },
+    );
+    select(&mut s, Side::Remote, &["logs"]);
+    send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side: Side::Remote,
+            op: OpKind::Permissions,
+        },
+    );
+    assert_eq!(draft(&mut s).mode_text, "755");
+    draft(&mut s).mode_text = "abc".into();
+    assert!(ops_of(&send(&mut s, FmMsg::Confirm(id))).is_empty());
+    assert!(fs(&s).dialog.as_ref().unwrap().error.is_some());
+    draft(&mut s).mode_text = "0750".into();
+    draft(&mut s).recursive = true;
+    assert!(matches!(
+        &ops_of(&send(&mut s, FmMsg::Confirm(id)))[..],
+        [(Side::Remote, FileOp::Chmod { mode: 0o750, recursive: true, items, .. })]
+            if items[0].name == "logs"
+    ));
+    assert_eq!(parse_mode("644"), Some(0o644));
+    assert_eq!(parse_mode("2775"), Some(0o2775));
+    assert_eq!(parse_mode("8"), None);
+    assert_eq!(parse_mode("17777"), None);
+}
+
+#[test]
+fn hosts_without_sftp_keep_their_side_read_only() {
+    let (mut s, id) = opened(Mode::Fallback);
+    send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side: Side::Remote,
+            op: OpKind::NewFolder,
+        },
+    );
+    assert!(fs(&s).dialog.is_none());
+    assert_eq!(
+        op_blocked(fs(&s), 0, Side::Remote, OpKind::NewFolder),
+        Some("Needs SFTP on the host")
+    );
+    send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side: Side::Local,
+            op: OpKind::NewFolder,
+        },
+    );
+    assert!(fs(&s).dialog.is_some(), "this computer still works");
+}
+
+#[test]
+fn copy_path_and_properties() {
+    let (mut s, id) = opened(Mode::Sftp);
+    let fx = send(
+        &mut s,
+        FmMsg::CopyPath {
+            id,
+            side: Side::Remote,
+        },
+    );
+    assert!(matches!(&fx[..], [FmEffect::CopyText(t)] if t == "/home/ops"));
+    select(&mut s, Side::Remote, &["logs", "notes.txt"]);
+    let fx = send(
+        &mut s,
+        FmMsg::CopyPath {
+            id,
+            side: Side::Remote,
+        },
+    );
+    assert!(
+        matches!(&fx[..], [FmEffect::CopyText(t)] if t == "/home/ops/logs\n/home/ops/notes.txt")
+    );
+
+    select(&mut s, Side::Remote, &["notes.txt"]);
+    let fx = send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side: Side::Remote,
+            op: OpKind::Properties,
+        },
+    );
+    assert!(ops_of(&fx).is_empty());
+    assert!(matches!(
+        &fs(&s).dialog.as_ref().unwrap().kind,
+        DialogKind::Properties { path, measure: Some(Ok(_)), .. } if path == "/home/ops/notes.txt"
+    ));
+    send(&mut s, FmMsg::Confirm(id));
+    assert!(fs(&s).dialog.is_none());
+
+    select(&mut s, Side::Remote, &["logs"]);
+    let fx = send(
+        &mut s,
+        FmMsg::Ask {
+            id,
+            side: Side::Remote,
+            op: OpKind::Properties,
+        },
+    );
+    assert!(matches!(
+        &ops_of(&fx)[..],
+        [(Side::Remote, FileOp::Measure { .. })]
+    ));
+    send(&mut s, FmMsg::CloseDialog(id));
+    // A late count for a closed dialog changes nothing.
+    send(
+        &mut s,
+        FmMsg::Measured {
+            id,
+            side: Side::Remote,
+            result: Ok(vec![]),
+        },
+    );
+    assert!(fs(&s).dialog.is_none());
+}

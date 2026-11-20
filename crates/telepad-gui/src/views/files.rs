@@ -1,5 +1,7 @@
-//! File windows (#62): WinSCP-style, this computer on the left and the host
-//! on the right, transfer queue at the bottom. One native window per host.
+//! File windows (#62, #63): WinSCP-style, this computer on the left and the
+//! host on the right, transfer queue at the bottom; new / rename / delete /
+//! permissions / properties from each pane's toolbar, right-click menu and
+//! keys (F7, F2, Del). One native window per host.
 
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
@@ -7,10 +9,12 @@ use std::time::Instant;
 use eframe::egui::{self, Color32, RichText};
 use egui_extras::{Column, TableBuilder};
 use telepad_app::files::{
-    FileDraft, FileSession, FmMsg, Mode, Pane, Side, SortCol, Status, TState, other,
+    DialogKind, FileDraft, FileSession, FmMsg, Mode, OpKind, Pane, Side, SortCol, Status, TState,
+    op_blocked, other, parse_mode,
 };
 use telepad_app::{Drafts, Model, Msg};
 use telepad_core::db::human_size;
+use telepad_core::files::ops::Measure;
 use telepad_core::files::transfer::{Decision, Direction};
 use telepad_core::files::{Entry, Kind, perm_text, time_text};
 
@@ -73,6 +77,7 @@ pub fn file_windows(
             }
             window(ui, s, dr, out, now);
             ask(ui, s, dr, out);
+            dialog(ui, s, dr, out);
         });
     }
 }
@@ -135,6 +140,51 @@ fn window(ui: &mut egui::Ui, s: &FileSession, d: &mut FileDraft, out: &mut Vec<M
         if s.status != Status::Ready {
             ui.spinner();
             return;
+        }
+        // Keys act on the pane clicked last, never while typing in a field
+        // or while a dialog is open.
+        let typing = ui.ctx().egui_wants_keyboard_input();
+        if !typing
+            && s.dialog.is_none()
+            && s.ask.is_none()
+            && let Some(side) = d.active
+        {
+            let key = |k| ui.input(|i| i.key_pressed(k));
+            let op = if key(egui::Key::F7) {
+                Some(OpKind::NewFolder)
+            } else if key(egui::Key::F2) {
+                Some(OpKind::Rename)
+            } else if key(egui::Key::Delete) {
+                Some(OpKind::Delete)
+            } else {
+                None
+            };
+            if let Some(op) = op {
+                send(out, FmMsg::Ask { id, side, op });
+            }
+        }
+        if !s.op_errors.is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(
+                    red(),
+                    format!(
+                        "{} {} item(s) could not be changed:",
+                        icons::X_CIRCLE,
+                        s.op_errors.len()
+                    ),
+                );
+                if ui.small_button("Dismiss").clicked() {
+                    send(out, FmMsg::DismissErrors(id));
+                }
+            });
+            egui::ScrollArea::vertical()
+                .id_salt(("files-op-errors", id))
+                .max_height(70.0)
+                .show(ui, |ui| {
+                    for e in &s.op_errors {
+                        ui.label(RichText::new(e).monospace().small());
+                    }
+                });
         }
         if ui.input(|i| i.key_pressed(egui::Key::F5))
             && let Some(side) = d.active
@@ -224,6 +274,10 @@ fn pane(ui: &mut egui::Ui, s: &FileSession, d: &mut FileDraft, side: Side, out: 
                 .hint_text(format!("{} filter", icons::SEARCH))
                 .desired_width(130.0),
         );
+    });
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        toolbar(ui, s, d, side, out);
     });
     if let Some(e) = &p.error {
         ui.colored_label(red(), format!("{} {e}", icons::X_CIRCLE));
@@ -406,6 +460,44 @@ fn table(
             }
             let resp = row.response();
             let name_resp = name_resp.map(|r| r | resp.clone()).unwrap_or(resp);
+            if name_resp.secondary_clicked() && !selected {
+                // Right-click acts on the row under the mouse.
+                let sel = d.selected_mut(side);
+                sel.clear();
+                sel.insert(e.name.clone());
+            }
+            if name_resp.secondary_clicked() {
+                d.active = Some(side);
+            }
+            name_resp.context_menu(|ui| {
+                let (copy, label) = match side {
+                    Side::Local => (Side::Local, "Upload"),
+                    Side::Remote => (Side::Remote, "Download"),
+                };
+                if ui
+                    .button(il(
+                        if copy == Side::Local {
+                            icons::ARROW_RIGHT
+                        } else {
+                            icons::ARROW_LEFT
+                        },
+                        label,
+                    ))
+                    .clicked()
+                {
+                    send(
+                        out,
+                        FmMsg::Copy {
+                            id,
+                            from: side,
+                            names: d.selected(side).iter().cloned().collect(),
+                        },
+                    );
+                    ui.close();
+                }
+                ui.separator();
+                toolbar_menu(ui, s, d, side, out);
+            });
             if name_resp.double_clicked() {
                 if e.is_dir() {
                     send(
@@ -660,4 +752,309 @@ fn ask(ui: &mut egui::Ui, s: &FileSession, d: &mut FileDraft, out: &mut Vec<Msg>
     if modal.should_close() {
         send(out, FmMsg::AskCancel(id));
     }
+}
+
+/// The operations of one pane: (op, icon, label, hint).
+fn ops_for(side: Side) -> Vec<(OpKind, &'static str, &'static str, &'static str)> {
+    let mut v = vec![
+        (OpKind::NewFolder, icons::PLUS, "Folder", "New folder (F7)"),
+        (OpKind::NewFile, icons::PLUS, "File", "New empty file"),
+        (OpKind::Rename, icons::EDIT, "Rename", "Rename (F2)"),
+        (
+            OpKind::Delete,
+            icons::TRASH,
+            "Delete",
+            "Delete the selected items (Del)",
+        ),
+        (
+            OpKind::Properties,
+            icons::INFO,
+            "Properties",
+            "Size, dates, permissions, owner",
+        ),
+    ];
+    if side == Side::Remote {
+        v.push((
+            OpKind::Permissions,
+            icons::LOCK,
+            "Permissions",
+            "Change permissions (chmod)",
+        ));
+    }
+    v
+}
+
+fn toolbar(ui: &mut egui::Ui, s: &FileSession, d: &FileDraft, side: Side, out: &mut Vec<Msg>) {
+    let id = s.id;
+    let n = d.selected(side).len();
+    for (op, icon, label, hint) in ops_for(side) {
+        let why = op_blocked(s, n, side, op);
+        let r = ui.add_enabled(why.is_none(), egui::Button::new(il(icon, label)).small());
+        let r = match why {
+            Some(w) => r.on_disabled_hover_text(w),
+            None => r.on_hover_text(hint),
+        };
+        if r.clicked() {
+            send(out, FmMsg::Ask { id, side, op });
+        }
+    }
+    if ui
+        .small_button(il(icons::COPY, "Path"))
+        .on_hover_text("Copy the full path of the selection (or of this folder)")
+        .clicked()
+    {
+        send(out, FmMsg::CopyPath { id, side });
+    }
+}
+
+fn toolbar_menu(ui: &mut egui::Ui, s: &FileSession, d: &FileDraft, side: Side, out: &mut Vec<Msg>) {
+    let id = s.id;
+    let n = d.selected(side).len();
+    for (op, icon, _, hint) in ops_for(side) {
+        let why = op_blocked(s, n, side, op);
+        let r = ui.add_enabled(why.is_none(), egui::Button::new(il(icon, hint)));
+        let r = match why {
+            Some(w) => r.on_disabled_hover_text(w),
+            None => r,
+        };
+        if r.clicked() {
+            send(out, FmMsg::Ask { id, side, op });
+            ui.close();
+        }
+    }
+    if ui.button(il(icons::COPY, "Copy path")).clicked() {
+        send(out, FmMsg::CopyPath { id, side });
+        ui.close();
+    }
+}
+
+fn where_text(s: &FileSession, side: Side) -> String {
+    match side {
+        Side::Local => "this computer".into(),
+        Side::Remote => s.host.alias.clone(),
+    }
+}
+
+fn measure_text(m: &Measure) -> String {
+    let more = if m.partial { "at least " } else { "" };
+    // `dirs` counts the folder itself.
+    match m.dirs {
+        0 => human_size(m.bytes),
+        1 => format!("{more}{} in {} file(s)", human_size(m.bytes), m.files),
+        n => format!(
+            "{more}{} in {} file(s) and {} subfolder(s)",
+            human_size(m.bytes),
+            m.files,
+            n - 1
+        ),
+    }
+}
+
+/// Mode checkboxes (owner / group / others × read / write / execute).
+fn mode_grid(ui: &mut egui::Ui, id: u64, d: &mut FileDraft) {
+    let mut mode = parse_mode(&d.mode_text).unwrap_or(d.mode);
+    let before = mode;
+    egui::Grid::new(("files-mode", id))
+        .num_columns(4)
+        .spacing([18.0, 4.0])
+        .show(ui, |ui| {
+            ui.label("");
+            ui.strong("Read");
+            ui.strong("Write");
+            ui.strong("Execute");
+            ui.end_row();
+            for (who, shift) in [("Owner", 6), ("Group", 3), ("Others", 0)] {
+                ui.label(who);
+                for bit in [4u32, 2, 1] {
+                    let b = bit << shift;
+                    let mut on = mode & b != 0;
+                    if ui.checkbox(&mut on, "").changed() {
+                        mode = if on { mode | b } else { mode & !b };
+                    }
+                }
+                ui.end_row();
+            }
+        });
+    if mode != before {
+        d.mode = mode;
+        d.mode_text = format!("{mode:o}");
+    }
+}
+
+/// New / Rename / Delete / Properties / Permissions dialog.
+fn dialog(ui: &mut egui::Ui, s: &FileSession, d: &mut FileDraft, out: &mut Vec<Msg>) {
+    let id = s.id;
+    let Some(dl) = &s.dialog else {
+        return;
+    };
+    let place = where_text(s, dl.side);
+    let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
+    let modal = egui::Modal::new(egui::Id::unique(("files-dialog", id))).show(ui.ctx(), |ui| {
+        ui.set_width(480.0);
+        let mut ok = None;
+        match &dl.kind {
+            DialogKind::NewFolder | DialogKind::NewFile | DialogKind::Rename { .. } => {
+                let (title, button) = match &dl.kind {
+                    DialogKind::NewFolder => ("New folder", "Create"),
+                    DialogKind::NewFile => ("New file", "Create"),
+                    _ => ("Rename", "Rename"),
+                };
+                ui.heading(title);
+                ui.label(
+                    RichText::new(format!("in {} on {place}", dl.dir))
+                        .monospace()
+                        .weak(),
+                );
+                if let DialogKind::Rename { from } = &dl.kind {
+                    ui.label(format!("Old name: {from}"));
+                }
+                let r = ui.add(
+                    egui::TextEdit::singleline(&mut d.name)
+                        .hint_text("name")
+                        .desired_width(f32::INFINITY),
+                );
+                if !r.has_focus() && !r.lost_focus() {
+                    r.request_focus();
+                }
+                if r.lost_focus() && enter {
+                    ok = Some(());
+                }
+                ok = ok.or(buttons(ui, dl.busy, button, false));
+            }
+            DialogKind::Delete { items, measure } => {
+                ui.heading(il(icons::TRASH, &format!("Delete {} item(s)?", items.len())));
+                ui.label(format!("in {} on {place}", dl.dir));
+                egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                    egui::Grid::new(("files-del", id)).num_columns(2).spacing([16.0, 2.0]).show(ui, |ui| {
+                        for (i, e) in items.iter().enumerate() {
+                            let icon = if e.kind == Kind::Dir { icons::FOLDER } else { icons::INFO };
+                            ui.label(RichText::new(format!("{icon} {}", e.name)).monospace());
+                            match measure {
+                                Some(Ok(m)) => ui.label(m.get(i).map(measure_text).unwrap_or_default()),
+                                Some(Err(e)) => ui.colored_label(red(), e),
+                                None => ui.spinner(),
+                            };
+                            ui.end_row();
+                        }
+                    });
+                });
+                if let Some(Ok(m)) = measure {
+                    let files: u64 = m.iter().map(|x| x.files).sum();
+                    let bytes: u64 = m.iter().map(|x| x.bytes).sum();
+                    let more = if m.iter().any(|x| x.partial) { "at least " } else { "" };
+                    ui.strong(format!("Total: {more}{files} file(s), {}", human_size(bytes)));
+                }
+                ui.colored_label(
+                    red(),
+                    match dl.side {
+                        Side::Remote => format!(
+                            "{} There is no recycle bin on {place}: this cannot be undone.",
+                            icons::WARNING
+                        ),
+                        Side::Local => format!(
+                            "{} The files are deleted, not moved to the recycle bin: this cannot be undone.",
+                            icons::WARNING
+                        ),
+                    },
+                );
+                ok = buttons(ui, dl.busy, "Delete", true);
+            }
+            DialogKind::Properties { item, path, measure } => {
+                ui.heading(il(icons::INFO, &item.name));
+                ui.add(egui::Label::new(RichText::new(path).monospace()).wrap());
+                egui::Grid::new(("files-props", id)).num_columns(2).spacing([16.0, 4.0]).show(ui, |ui| {
+                    ui.label("Where");
+                    ui.label(&place);
+                    ui.end_row();
+                    ui.label("Type");
+                    ui.label(match (item.kind, item.link_dir) {
+                        (Kind::Dir, _) => "Folder",
+                        (Kind::Link, true) => "Link to a folder",
+                        (Kind::Link, false) => "Link",
+                        (Kind::File, _) => "File",
+                        (Kind::Other, _) => "Other (device, socket, pipe)",
+                    });
+                    ui.end_row();
+                    ui.label("Size");
+                    match measure {
+                        Some(Ok(m)) => ui.label(measure_text(m)),
+                        Some(Err(e)) => ui.colored_label(red(), e),
+                        None => ui.spinner(),
+                    };
+                    ui.end_row();
+                    ui.label("Modified (UTC)");
+                    ui.label(time_text(item.mtime));
+                    ui.end_row();
+                    if let Some(p) = item.perm {
+                        ui.label("Permissions");
+                        ui.label(RichText::new(format!("{} ({:o})", perm_text(Some(p)), p & 0o7777)).monospace());
+                        ui.end_row();
+                    }
+                    if !item.owner.is_empty() {
+                        ui.label("Owner");
+                        ui.label(&item.owner);
+                        ui.end_row();
+                    }
+                });
+                if ui.button("Close").clicked() {
+                    send(out, FmMsg::CloseDialog(id));
+                }
+            }
+            DialogKind::Permissions { items } => {
+                ui.heading(il(icons::LOCK, "Permissions"));
+                let names: Vec<&str> = items.iter().take(4).map(|e| e.name.as_str()).collect();
+                let more = items.len().saturating_sub(4);
+                ui.label(RichText::new(format!(
+                    "{}{} on {place}",
+                    names.join(", "),
+                    if more > 0 { format!(" and {more} more") } else { String::new() }
+                )).monospace());
+                mode_grid(ui, id, d);
+                ui.horizontal(|ui| {
+                    ui.label("Octal");
+                    ui.add(egui::TextEdit::singleline(&mut d.mode_text).desired_width(60.0).font(egui::TextStyle::Monospace));
+                    if let Some(m) = parse_mode(&d.mode_text) {
+                        ui.label(RichText::new(perm_text(Some(m))).monospace().weak());
+                    }
+                });
+                if items.iter().any(|e| e.kind == Kind::Dir) {
+                    ui.checkbox(&mut d.recursive, "Also everything inside the folders")
+                        .on_hover_text("Folders inside get this mode plus x wherever r is set, so they stay openable. Files inside get its read / write bits; x only where they already had it; never setuid / setgid / sticky. Links are not changed.");
+                }
+                ui.label(RichText::new("Only what the login user owns can be changed (no sudo).").weak().small());
+                ok = buttons(ui, dl.busy, "Apply", false);
+            }
+        }
+        if let Some(e) = &dl.error {
+            ui.colored_label(red(), format!("{} {e}", icons::X_CIRCLE));
+        }
+        if ok.is_some() {
+            send(out, FmMsg::Confirm(id));
+        }
+    });
+    if modal.should_close() && !dl.busy {
+        send(out, FmMsg::CloseDialog(id));
+    }
+}
+
+/// OK / Cancel; `danger` paints OK red. `Some` when OK was clicked.
+fn buttons(ui: &mut egui::Ui, busy: bool, ok: &str, danger: bool) -> Option<()> {
+    let mut clicked = None;
+    ui.horizontal(|ui| {
+        let text = if danger {
+            RichText::new(ok).color(red())
+        } else {
+            RichText::new(ok)
+        };
+        if ui.add_enabled(!busy, egui::Button::new(text)).clicked() {
+            clicked = Some(());
+        }
+        if busy {
+            ui.spinner();
+        }
+        if ui.add_enabled(!busy, egui::Button::new("Cancel")).clicked() {
+            ui.close();
+        }
+    });
+    clicked
 }
