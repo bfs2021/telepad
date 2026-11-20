@@ -16,6 +16,7 @@ eframe = { version = "0.37.0", default-features = false, features = ["glow", "de
 egui_extras = { version = "0.37.0", default-features = false, features = ["svg"] }
 arboard = { version = "3.7.0", default-features = false }
 rfd = "0.18.0"
+regex = { version = "1.13.2", default-features = false, features = ["std", "perf", "unicode"] }
 rusqlite = { version = "0.43.0", features = ["bundled"] }
 self-replace = "1.5.1"
 semver = "1.0.28"

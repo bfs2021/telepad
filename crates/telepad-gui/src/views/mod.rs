@@ -19,6 +19,7 @@ mod panels;
 mod ports;
 mod run_info;
 mod sensors;
+mod text_editor;
 mod update_window;
 
 use std::time::Instant;

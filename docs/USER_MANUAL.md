@@ -114,7 +114,7 @@ support. Sort by **Flags** to see the most urgent hosts first.
 ## Host detail
 
 The header shows the status, OS logo, alias and `user@address`. Below it are the buttons
-**Open SSH** / **Open RDP**, **Open files…** (see [Files](#files-upload--download--manage)),
+**Open SSH** / **Open RDP**, **Open files…** (see [Files](#files-upload--download--manage--edit)),
 **Copy ssh command**, **Refresh**, then **Edit**, **Clone** and **Delete**. On a narrow window the buttons (and the top bar) wrap onto a second line instead
 of being cut off. Below that:
 
@@ -344,7 +344,7 @@ Changed hosts are marked **pending** and counted at the bottom. **Discard** drop
   **Reload** (your pending changes stay) and look at the preview again.
 - Telepad's changes are saved in one transaction; a renamed host keeps its place in the list.
 
-## Files (upload / download / manage)
+## Files (upload / download / manage / edit)
 
 **Open files…** in a host's header opens a separate window, WinSCP style: **This computer**
 on the left, the host on the right. It logs in as the host's normal SSH login (the same
@@ -399,6 +399,7 @@ you clicked last, never while you are typing in a field.
 
 | Action | Toolbar / menu | Key | What it does |
 |---|---|---|---|
+| Edit | **Edit** | F4 | One selected file opens in the editor (see [Editor](#editor)); double-clicking a file does the same. |
 | New folder | **Folder** | F7 | Asks for a name and creates the folder in the pane's folder; it is selected afterwards. |
 | New file | **File** | | Creates an empty file. |
 | Rename | **Rename** | F2 | One selected item, in the same folder. An existing name is never replaced. |
@@ -429,6 +430,69 @@ you clicked last, never while you are typing in a field.
 - Telepad never uses `sudo` here: only what the login user may change is changed.
 - On a host **without SFTP** the host side's actions are disabled (*Needs SFTP on the
   host*); copying and this computer's side still work.
+
+### Editor
+
+**Edit** / F4 or a double-click on a file opens it in the host's **Editor** window, which
+looks and works like VS Code. One editor window per file window: each file is a tab, files
+of this computer and of the host side by side (the tab's icon says which; hover it for the
+full path). Opening a file that already has a tab switches to it.
+
+- **Refused files** show the reason in their tab instead of the text: binary files, files
+  that are not UTF-8 text, and files over 10 MiB (download them instead). **Close tab**
+  closes it.
+- **Look**: light or dark with Telepad's theme, line numbers, the line with the cursor
+  highlighted, monospace font, colours by language. The language comes from the file name
+  (`.sh`, `.yml` / `.yaml`, `.json`, `.toml`, `.ini` / `.conf` / `.cnf`, `.env`, `Dockerfile`,
+  nginx files (`nginx.conf`, files under `/nginx/`), `.py`, `.js`, `.ts`, `.php`, `.sql`,
+  `.md`, `.rs`), else from a `#!` first line (`#!/bin/sh`); the status bar's language menu
+  changes it. Files over 2 MiB are shown without colours.
+- **Tabs**: a tab with changes that are not saved shows **●**; **×** (or a middle click,
+  or Ctrl+W) closes it.
+- **Status bar**: *Saved* / *Not saved* / *Saving…*, then `Ln 12, Col 5` (and how many
+  characters are selected), the indentation (*Spaces: 2* or *Tab*, from the file), the
+  language, the line endings (**LF** or **CRLF**) and the encoding (**UTF-8**, or **UTF-8 with
+  BOM**).
+
+| Key | Does |
+|---|---|
+| Ctrl+S | Save (also the **Save** button) |
+| Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) | Undo / redo, per tab |
+| Ctrl+F | Find (a selection on one line becomes the search text) |
+| Ctrl+H | Replace |
+| Ctrl+G | Go to line |
+| Enter / Shift+Enter, F3 / Shift+F3 | Next / previous match |
+| Esc | Close the find bar, back to the text with the match selected |
+| Tab / Shift+Tab | Indent / outdent the selected lines (one line: Tab inserts at the cursor) |
+| Ctrl+W | Close the tab |
+
+- **Find / replace**: **Aa** match case, **ab** whole word, **.\*** regular expression;
+  every match is highlighted, the current one stronger, with *3 of 12*. **Replace** replaces
+  the current match and goes to the next; **Replace all** replaces every match (*12
+  replaced*). With **.\*** the replacement may use `$1`, `$2`… for the groups (`$2_$1` swaps
+  `APP_ENV` to `ENV_APP`; `$$` is a `$`). An invalid expression says why in red.
+- **Line endings and encoding are kept**: a CRLF file is saved with CRLF, an LF file with LF,
+  a byte order mark stays, and so does the presence or absence of a newline at the end. A
+  file with both kinds of line endings is saved with the more common one (hover **CRLF** /
+  **LF** to see it).
+- **Saving** writes the text to `<name>.telepad-part` next to the file, gives it the file's
+  permissions (and owner, when the login may set it), then puts it in place of the file:
+  a failed save never leaves half a file. A link is followed: the file it points to is
+  saved, the link stays. If the folder cannot be written, the red line under the path says
+  so (*Cannot write a temporary file in /etc: Permission denied*); the text stays in the tab.
+- **Changed meanwhile**: before writing, Telepad checks that the file's size and time are
+  still what it loaded. If someone changed it on the host (or another program on this
+  computer), a yellow box says so with its size and time now:
+  - **Overwrite** — save your text anyway;
+  - **Reload** — discard your changes and load the file as it is now;
+  - **Show diff** — the lines that differ (`−` in the file now, `+` your text, unchanged
+    runs folded);
+  - **Keep editing** — close the box (Save asks again).
+- **Unsaved changes**: closing a tab, the editor window, the file window or Telepad itself
+  while a tab has changes asks first: **Save** (the window closes when the saves are done;
+  a save that fails keeps it open), **Don't save**, or **Cancel**. When Telepad itself was
+  closing, close it again after answering.
+- Editing on the host needs SFTP: on a host without it, only this computer's files open.
 
 ## Public keys (add / revoke)
 

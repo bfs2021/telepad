@@ -426,3 +426,79 @@ fn sftp_file_operations_new_rename_chmod_measure_delete() {
     );
     lab_sh(&s, &host, "rm -rf ~/ops-keep");
 }
+
+#[test]
+fn sftp_editor_load_save_conflict_and_links() {
+    use super::edit::{self, SaveError};
+    use super::text;
+    let Some((s, host, _)) = lab() else {
+        eprintln!("TELEPAD_TEST_SSH not set: skipped");
+        return;
+    };
+    let mut c = Sftp::connect(&s, &host).unwrap();
+    let home = c.realpath(".").unwrap();
+    let base = sftp::join(&home, "edit-test");
+    lab_sh(&s, &host, "rm -rf ~/edit-test && mkdir ~/edit-test");
+    let cancel = AtomicBool::new(false);
+    let put = |c: &mut Sftp, p: &str, b: &[u8], perm: u32| {
+        let mut src = b;
+        c.upload(&mut src, p, Some(perm), &cancel, &mut |_| {})
+            .unwrap();
+        c.setstat(
+            p,
+            sftp::Attrs {
+                perm: Some(perm),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    };
+    let p = sftp::join(&base, "app.env");
+    put(&mut c, &p, b"A=1\r\nB=2\r\n", 0o640);
+
+    // Load, edit, save: CRLF and mode kept, no part file left.
+    let (bytes, st) = edit::read_remote(&mut c, &p).unwrap();
+    let doc = text::decode(&bytes).unwrap();
+    assert!(doc.crlf && !doc.bom);
+    let out = text::encode(&doc.text.replace("B=2", "B=ü"), doc.crlf, doc.bom);
+    let st2 = edit::save_remote(&mut c, &p, &out, Some(st)).unwrap();
+    assert_eq!(
+        edit::read_remote(&mut c, &p).unwrap().0,
+        "A=1\r\nB=ü\r\n".as_bytes()
+    );
+    assert_eq!(c.stat(&p).unwrap().perm.unwrap() & 0o7777, 0o640);
+    let names: Vec<String> = c.list(&base).unwrap().into_iter().map(|e| e.name).collect();
+    assert_eq!(names, vec!["app.env".to_string()]);
+
+    // Changed on the host meanwhile: refused, the host's text stays.
+    put(&mut c, &p, b"A=1\r\nB=changed on the host\r\n", 0o640);
+    match edit::save_remote(&mut c, &p, b"mine", Some(st2)) {
+        Err(SaveError::Changed(Some(now))) => assert_eq!(now.size, 28),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(
+        edit::read_remote(&mut c, &p).unwrap().0,
+        b"A=1\r\nB=changed on the host\r\n"
+    );
+    edit::save_remote(&mut c, &p, b"overwritten\n", None).unwrap();
+
+    // Through a link: the target changes, the link stays a link.
+    lab_sh(&s, &host, "ln -s app.env ~/edit-test/link.env");
+    let l = sftp::join(&base, "link.env");
+    let (_, lst) = edit::read_remote(&mut c, &l).unwrap();
+    edit::save_remote(&mut c, &l, b"via link\n", Some(lst)).unwrap();
+    assert_eq!(c.lstat(&l).unwrap().kind(), super::Kind::Link);
+    assert_eq!(edit::read_remote(&mut c, &p).unwrap().0, b"via link\n");
+
+    // Binary files and folders are refused with the reason.
+    let bin = sftp::join(&base, "x.bin");
+    put(&mut c, &bin, b"\x7fELF\x00\x01", 0o644);
+    let (b, _) = edit::read_remote(&mut c, &bin).unwrap();
+    assert!(text::decode(&b).unwrap_err().contains("Binary"));
+    assert!(
+        edit::read_remote(&mut c, &base)
+            .unwrap_err()
+            .contains("not a file")
+    );
+    lab_sh(&s, &host, "rm -rf ~/edit-test");
+}

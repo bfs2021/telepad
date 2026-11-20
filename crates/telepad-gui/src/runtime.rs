@@ -13,6 +13,7 @@ use std::time::Instant;
 
 use eframe::egui;
 use telepad_app::db::{DbEffect, DbId, DbJob, DbMsg};
+use telepad_app::editor::{EdMsg, Load};
 use telepad_app::files::{FileOp, FmEffect, FmId, FmMsg, Mode, Side};
 use telepad_app::hostsync::{HsEffect, HsMsg};
 use telepad_app::{Effect, Msg, State};
@@ -52,6 +53,20 @@ struct FileWorker {
 enum FileJob {
     List(Side, String),
     Op(Side, FileOp),
+    /// Editor (#64): read a file / write it back.
+    Load {
+        tab: u64,
+        side: Side,
+        path: String,
+        load: Load,
+    },
+    Save {
+        tab: u64,
+        side: Side,
+        path: String,
+        bytes: Vec<u8>,
+        expect: Option<telepad_core::files::edit::Stamp>,
+    },
 }
 
 /// Run one file operation on this computer or the host.
@@ -457,9 +472,52 @@ impl Runtime {
                     if !ok {
                         return;
                     }
+                    use telepad_core::files::{edit, text};
                     for job in inbox {
                         let (side, path) = match job {
                             FileJob::List(side, path) => (side, path),
+                            FileJob::Load {
+                                tab,
+                                side,
+                                path,
+                                load,
+                            } => {
+                                let read = match (side, sftp.as_mut()) {
+                                    (Side::Local, _) => edit::read_local(&path),
+                                    (Side::Remote, Some(c)) => edit::read_remote(c, &path),
+                                    (Side::Remote, None) => Err("Needs SFTP on the host".into()),
+                                };
+                                let result = read.and_then(|(bytes, stamp)| {
+                                    text::decode(&bytes).map(|doc| (doc, stamp))
+                                });
+                                send(fm(FmMsg::Editor {
+                                    id,
+                                    msg: EdMsg::Loaded { tab, load, result },
+                                }));
+                                continue;
+                            }
+                            FileJob::Save {
+                                tab,
+                                side,
+                                path,
+                                bytes,
+                                expect,
+                            } => {
+                                let result = match (side, sftp.as_mut()) {
+                                    (Side::Local, _) => edit::save_local(&path, &bytes, expect),
+                                    (Side::Remote, Some(c)) => {
+                                        edit::save_remote(c, &path, &bytes, expect)
+                                    }
+                                    (Side::Remote, None) => Err(edit::SaveError::Failed(
+                                        "Needs SFTP on the host".into(),
+                                    )),
+                                };
+                                send(fm(FmMsg::Editor {
+                                    id,
+                                    msg: EdMsg::Saved { tab, result },
+                                }));
+                                continue;
+                            }
                             FileJob::Op(side, op) => {
                                 let out = match (side, sftp.as_mut()) {
                                     (Side::Local, _) => run_file_op(
@@ -697,6 +755,63 @@ impl Runtime {
                 }),
                 None => None,
             },
+            FmEffect::Load {
+                id,
+                tab,
+                side,
+                path,
+                load,
+            } => self.files.get(&id).and_then(|w| {
+                w.jobs
+                        .send(FileJob::Load {
+                            tab,
+                            side,
+                            path,
+                            load,
+                        })
+                        .err()
+                        .map(|_| {
+                            fm(FmMsg::Editor {
+                                id,
+                                msg: EdMsg::Loaded {
+                                    tab,
+                                    load,
+                                    result: Err(
+                                        "Not connected — click Retry in the file window".into()
+                                    ),
+                                },
+                            })
+                        })
+            }),
+            FmEffect::Save {
+                id,
+                tab,
+                side,
+                path,
+                bytes,
+                expect,
+            } => self.files.get(&id).and_then(|w| {
+                w.jobs
+                    .send(FileJob::Save {
+                        tab,
+                        side,
+                        path,
+                        bytes,
+                        expect,
+                    })
+                    .err()
+                    .map(|_| {
+                        fm(FmMsg::Editor {
+                            id,
+                            msg: EdMsg::Saved {
+                                tab,
+                                result: Err(telepad_core::files::edit::SaveError::Failed(
+                                    "Not connected — click Retry in the file window".into(),
+                                )),
+                            },
+                        })
+                    })
+            }),
             FmEffect::CopyText(text) => {
                 let n = text.lines().count();
                 // Straight to the OS clipboard: egui's copy only reaches it on

@@ -52,7 +52,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 | `src/parse.rs` | Pure parsers for each section, unit-tested against `tests/fixtures/` |
 | `src/authorized_keys.rs` | Public keys window backend: validate a pasted key (type, base64, embedded type), SHA256 fingerprint, add/revoke script for `~/.ssh/authorized_keys`, lockout guard (`login_keys`), parallel `apply_all` |
 | `src/db/` | Database browser (#52–#54): `detect` (DB containers / host listeners → `DbTarget`, user from container env), `tunnel` (`ssh -N -L`, closed on drop and by `close_all` on exit), `client` (`Session`: MySQL `mysql` / PostgreSQL `postgres` drivers, metadata, pages, queries, transactional row edits, DDL, cancel; live tests via `TELEPAD_TEST_MYSQL` / `TELEPAD_TEST_PG`), `sql` (quoting, statement split, danger / read-only checks, row SQL), `ddl` (structure editor SQL), `secret` (OS password store) |
-| `src/files/` | File window (#62): `sftp` (own SFTP v3 client over `ssh -s <alias> sftp`: list, stat, pipelined download / upload, mkdir, rename, remove, setstat), `fallback` (hosts without SFTP: `sh` listing + `scp -O`), `rsync` (availability check, `-e ssh` args with `--protect-args`, dry run), `transfer` (`plan`: recursive walk + existing files, `run`: copy via `.telepad-part`, keep mtime), `ops` (#63: `Fs` trait for `LocalFs` / `Sftp`, `check_name`, new folder / file, rename, recursive delete / chmod / measure, `dir_mode` / `file_mode`), local listing helpers; live tests via `TELEPAD_TEST_SSH` (`tests/sshd/` lab image) |
+| `src/files/` | File window (#62): `sftp` (own SFTP v3 client over `ssh -s <alias> sftp`: list, stat, pipelined download / upload, mkdir, rename, remove, setstat), `fallback` (hosts without SFTP: `sh` listing + `scp -O`), `rsync` (availability check, `-e ssh` args with `--protect-args`, dry run), `transfer` (`plan`: recursive walk + existing files, `run`: copy via `.telepad-part`, keep mtime), `ops` (#63: `Fs` trait for `LocalFs` / `Sftp`, `check_name`, new folder / file, rename, recursive delete / chmod / measure, `dir_mode` / `file_mode`), `edit` (#64: read / save with `Stamp` check, `.telepad-part`, links followed), `text` (#64: decode / encode keeping CRLF / BOM, find / replace incl. regex, go to line, indent), `syntax` (#64: language by name / `#!`, line lexer → `Tok` spans), local listing helpers; live tests via `TELEPAD_TEST_SSH` (`tests/sshd/` lab image) |
 | `src/docker_actions.rs` | Docker/compose action commands + terminal script (show, confirm, run), read-only "How it runs" (`docker inspect` → `docker run`, compose files, secrets masked) |
 | `src/cluster.rs` | Docker Swarm (managers) and Kubernetes (kubectl / k3s / microk8s) model + parsers for `===SWARM===` / `===KUBE===`; cluster key so several managers show one cluster |
 | `src/hostsync.rs` | Host Management (#58): block-preserving OpenSSH config model (`ConfigFile`: managed single-alias blocks vs kept text), `compare` (rows by alias), `apply` (upsert / delete blocks, new hosts before `Host *` / `Match`), `line_diff`, `write` (only if unchanged since loading; timestamped `.bak`, atomic, permissions kept) |
@@ -75,6 +75,8 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 | `src/tests.rs` | Behaviour tests for `update()` (no GUI, no database, no network) |
 | `src/files.rs` | File windows: `FileSession` (model: panes, transfers, overwrite question, operation `Dialog`, `op_errors`), `FileDraft` (paths, filters, selection, rsync toggle, dialog name / mode), `FmMsg` / `FmEffect` / `FileOp`, `op_blocked`, `update` |
 | `src/tests_files.rs` | Behaviour tests for the file windows |
+| `src/editor.rs` | Editor of a file window (#64): `FileEditor` (tabs, active, unsaved question), `EdTab` (path, language, line endings, `Stamp`, saved text, conflict), `EdDraft` (texts, find bar), `EdMsg`, `update` (open, save, conflict, close / unsaved) |
+| `src/tests_editor.rs` | Behaviour tests for the editor |
 | `src/tests_db.rs` | Behaviour tests for the database windows |
 
 ### telepad-gui
@@ -84,7 +86,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 | `src/main.rs` | Arguments, `--open-ssh`; no console window in Windows release builds |
 | `src/app.rs` | eframe app: each frame `runtime.frame()`, `views::draw()`, dispatch the returned `Msg`s |
 | `src/runtime.rs` | Executes `Effect`s (database, ssh, collector, update threads, dialogs, clipboard read/write via `arboard`, OS) and feeds results back as `Msg`s |
-| `src/views/` | One module per screen: `panels` (top bar, status bar, host list), `overview`, `detail`, `sensors`, `docker`, `docker_overview`, `ports`, `editor`, `import`, `keys`, `database` (one native window per connection), `files` (one native window per host), `host_sync`, `confirm`, `update_window` |
+| `src/views/` | One module per screen: `panels` (top bar, status bar, host list), `overview`, `detail`, `sensors`, `docker`, `docker_overview`, `ports`, `editor`, `import`, `keys`, `database` (one native window per connection), `files` (one native window per host), `text_editor` (its editor window: tabs, gutter, colours, find bar), `host_sync`, `confirm`, `update_window` |
 | `src/widgets.rs` | Shared drawing helpers and colours (bars, status dot, fan, thresholds) |
 | `src/icons.rs` | Phosphor icon font glyphs and OS logo detection; `assets/` holds the font and logos |
 | `assets/icon/` | App icon (`telepad.png` window icon, `.ico` exe/installer, `.icns` macOS app), generated by `scripts/make-icon.py` |
@@ -145,6 +147,9 @@ in `update()` with a test → run the effect in `runtime.rs` → draw/emit it in
   (`scp` without `-p`). File operations (#63, `files/ops.rs`): new folder / file, rename,
   delete, permissions only from the window's dialogs (delete confirmed with the item list);
   names checked as one path element, renames never replace, links never followed.
+  Editor (#64, `files/edit.rs`): writes only on Save, via `<name>.telepad-part` + rename with
+  the file's mode (owner when allowed), and only if size / mtime still match what was loaded
+  (else Overwrite / Reload / Show diff).
 - Remote script: POSIX `sh`, BusyBox-safe, every command guarded, `LC_ALL=C`.
 - New metric = new section in `script.sh` + parser + fixture test (core) + view.
 - OS-specific code only in `telepad-core/src/platform.rs` behind `#[cfg(target_os = ...)]`.
@@ -238,4 +243,4 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #58 | feat(hosts): Host Management window — compare and sync Telepad hosts with an OpenSSH config | closed | 2026-11-19 |
 | #62 | feat(files): WinSCP-style file window — local and remote panes with transfers | closed | 2026-11-19 |
 | #63 | feat(files): file operations — new, rename, delete, permissions | closed | 2026-11-20 |
-| #64 | feat(files): built-in VS Code-like editor for local and remote files | open | 2026-11-19 |
+| #64 | feat(files): built-in VS Code-like editor for local and remote files | ready-for-review | 2026-11-20 |
