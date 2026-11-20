@@ -237,5 +237,5 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #54 | feat(db): edit table structure — columns, indexes, foreign keys | closed | 2026-11-19 |
 | #58 | feat(hosts): Host Management window — compare and sync Telepad hosts with an OpenSSH config | closed | 2026-11-19 |
 | #62 | feat(files): WinSCP-style file window — local and remote panes with transfers | closed | 2026-11-19 |
-| #63 | feat(files): file operations — new, rename, delete, permissions | ready-for-review | 2026-11-20 |
+| #63 | feat(files): file operations — new, rename, delete, permissions | closed | 2026-11-20 |
 | #64 | feat(files): built-in VS Code-like editor for local and remote files | open | 2026-11-19 |
