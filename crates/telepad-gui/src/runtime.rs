@@ -13,7 +13,7 @@ use std::time::Instant;
 
 use eframe::egui;
 use telepad_app::db::{DbEffect, DbId, DbJob, DbMsg};
-use telepad_app::files::{FmEffect, FmId, FmMsg, Mode, Side};
+use telepad_app::files::{FileOp, FmEffect, FmId, FmMsg, Mode, Side};
 use telepad_app::hostsync::{HsEffect, HsMsg};
 use telepad_app::{Effect, Msg, State};
 use telepad_core::authorized_keys;
@@ -41,9 +41,69 @@ pub struct Runtime {
 }
 
 struct FileWorker {
-    browse: Sender<(Side, String)>,
+    jobs: Sender<FileJob>,
     cancels: HashMap<u64, Arc<AtomicBool>>,
+    /// Stops a running delete / permission change when the window closes.
+    stop: Arc<AtomicBool>,
     host: telepad_core::config::HostEntry,
+}
+
+/// Work for a file window's worker thread (it holds the SFTP connection).
+enum FileJob {
+    List(Side, String),
+    Op(Side, FileOp),
+}
+
+/// Run one file operation on this computer or the host.
+fn run_file_op(
+    fs: &mut dyn telepad_core::files::ops::Fs,
+    local: bool,
+    op: FileOp,
+    stop: &AtomicBool,
+) -> Result<FmOpOut, String> {
+    use telepad_core::files::ops::{self, Report};
+    let one = |select: String| {
+        (
+            Report {
+                done: 1,
+                errors: vec![],
+            },
+            Some(select),
+        )
+    };
+    Ok(match op {
+        FileOp::NewFolder { dir, name } => {
+            FmOpOut::Done(ops::new_folder(fs, &dir, &name, local).map(|_| one(name)))
+        }
+        FileOp::NewFile { dir, name } => {
+            FmOpOut::Done(ops::new_file(fs, &dir, &name, local).map(|_| one(name)))
+        }
+        FileOp::Rename { dir, from, to } => {
+            FmOpOut::Done(ops::rename(fs, &dir, &from, &to, local).map(|()| one(to)))
+        }
+        FileOp::Delete { dir, items } => {
+            FmOpOut::Done(Ok((ops::delete(fs, &dir, &items, stop), None)))
+        }
+        FileOp::Chmod {
+            dir,
+            items,
+            mode,
+            recursive,
+        } => FmOpOut::Done(Ok((
+            ops::chmod(fs, &dir, &items, mode, recursive, stop),
+            None,
+        ))),
+        FileOp::Measure { dir, items } => {
+            FmOpOut::Measured(Ok(ops::measure(fs, &dir, &items, stop)))
+        }
+    })
+}
+
+type OpDoneResult = Result<(telepad_core::files::ops::Report, Option<String>), String>;
+
+enum FmOpOut {
+    Done(OpDoneResult),
+    Measured(Result<Vec<telepad_core::files::ops::Measure>, String>),
 }
 
 struct DbWorker {
@@ -325,6 +385,7 @@ impl Runtime {
             cancel(&w.cancel);
         }
         for (_, w) in self.files.drain() {
+            w.stop.store(true, Ordering::Relaxed);
             for c in w.cancels.values() {
                 c.store(true, Ordering::Relaxed);
             }
@@ -342,15 +403,18 @@ impl Runtime {
                     .ws
                     .as_ref()
                     .and_then(|ws| ws.store.files_paths(&host.alias).ok().flatten());
-                let (jobs, inbox) = mpsc::channel::<(Side, String)>();
+                let (jobs, inbox) = mpsc::channel::<FileJob>();
+                let stop = Arc::new(AtomicBool::new(false));
                 if let Some(old) = self.files.insert(
                     id,
                     FileWorker {
-                        browse: jobs,
+                        jobs,
                         cancels: HashMap::new(),
+                        stop: stop.clone(),
                         host: host.clone(),
                     },
                 ) {
+                    old.stop.store(true, Ordering::Relaxed);
                     for c in old.cancels.values() {
                         c.store(true, Ordering::Relaxed);
                     }
@@ -393,7 +457,36 @@ impl Runtime {
                     if !ok {
                         return;
                     }
-                    for (side, path) in inbox {
+                    for job in inbox {
+                        let (side, path) = match job {
+                            FileJob::List(side, path) => (side, path),
+                            FileJob::Op(side, op) => {
+                                let out = match (side, sftp.as_mut()) {
+                                    (Side::Local, _) => run_file_op(
+                                        &mut telepad_core::files::ops::LocalFs,
+                                        true,
+                                        op,
+                                        &stop,
+                                    ),
+                                    (Side::Remote, Some(c)) => run_file_op(c, false, op, &stop),
+                                    (Side::Remote, None) => {
+                                        Err("Needs SFTP on the host".to_string())
+                                    }
+                                };
+                                send(fm(match out {
+                                    Ok(FmOpOut::Measured(result)) => {
+                                        FmMsg::Measured { id, side, result }
+                                    }
+                                    Ok(FmOpOut::Done(result)) => FmMsg::OpDone { id, side, result },
+                                    Err(e) => FmMsg::OpDone {
+                                        id,
+                                        side,
+                                        result: Err(e),
+                                    },
+                                }));
+                                continue;
+                            }
+                        };
                         let result = match side {
                             Side::Local => {
                                 let p =
@@ -413,7 +506,7 @@ impl Runtime {
                 None
             }
             FmEffect::List { id, side, path } => match self.files.get(&id) {
-                Some(w) => w.browse.send((side, path)).err().map(|_| {
+                Some(w) => w.jobs.send(FileJob::List(side, path)).err().map(|_| {
                     fm(FmMsg::Listed {
                         id,
                         side,
@@ -594,8 +687,32 @@ impl Runtime {
                 }
                 None
             }
+            FmEffect::Op { id, side, op } => match self.files.get(&id) {
+                Some(w) => w.jobs.send(FileJob::Op(side, op)).err().map(|_| {
+                    fm(FmMsg::OpDone {
+                        id,
+                        side,
+                        result: Err("Not connected — click Retry".into()),
+                    })
+                }),
+                None => None,
+            },
+            FmEffect::CopyText(text) => {
+                let n = text.lines().count();
+                // Straight to the OS clipboard: egui's copy only reaches it on
+                // the next frame of the viewport that asked, which may not come.
+                if let Err(e) = arboard::Clipboard::new().and_then(|mut c| c.set_text(text)) {
+                    return Some(Msg::Notice(format!("Could not copy: {e}")));
+                }
+                Some(Msg::Notice(if n > 1 {
+                    format!("{n} paths copied to clipboard")
+                } else {
+                    "Path copied to clipboard".into()
+                }))
+            }
             FmEffect::Close(id) => {
                 if let Some(w) = self.files.remove(&id) {
+                    w.stop.store(true, Ordering::Relaxed);
                     for c in w.cancels.values() {
                         c.store(true, Ordering::Relaxed);
                     }

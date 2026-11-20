@@ -17,7 +17,8 @@ hosts with the **system OpenSSH client** and the keys you already use, runs a
   for Windows hosts without SSH
 - **Open files…**: a WinSCP-style window per host, this computer on the left and the host
   on the right; upload / download with drag and drop, overwrite questions and progress,
-  over SFTP (scp when the host has no SFTP server, rsync when both sides have it)
+  over SFTP (scp when the host has no SFTP server, rsync when both sides have it); new
+  folder / file, rename, delete, properties and permissions on both sides
 - **Public keys…**: add or revoke one SSH public key on many hosts at once
 - **Host Management…**: Telepad's hosts next to `~/.ssh/config` (or another config
   file); copy, edit or delete per host, merge / replace / sync, with a preview and a

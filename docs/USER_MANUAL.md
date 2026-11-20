@@ -114,7 +114,7 @@ support. Sort by **Flags** to see the most urgent hosts first.
 ## Host detail
 
 The header shows the status, OS logo, alias and `user@address`. Below it are the buttons
-**Open SSH** / **Open RDP**, **Open files…** (see [Files](#files-upload--download)),
+**Open SSH** / **Open RDP**, **Open files…** (see [Files](#files-upload--download--manage)),
 **Copy ssh command**, **Refresh**, then **Edit**, **Clone** and **Delete**. On a narrow window the buttons (and the top bar) wrap onto a second line instead
 of being cut off. Below that:
 
@@ -344,7 +344,7 @@ Changed hosts are marked **pending** and counted at the bottom. **Discard** drop
   **Reload** (your pending changes stay) and look at the preview again.
 - Telepad's changes are saved in one transaction; a renamed host keeps its place in the list.
 
-## Files (upload / download)
+## Files (upload / download / manage)
 
 **Open files…** in a host's header opens a separate window, WinSCP style: **This computer**
 on the left, the host on the right. It logs in as the host's normal SSH login (the same
@@ -390,6 +390,45 @@ only folders the login user may write to can be changed.
 **rsync**: with **Use rsync** ticked, Upload / Download first run `rsync --dry-run` and list
 what would change (*rsync would change N path(s)*); **Run rsync** then copies them. rsync
 copies only what differs and never deletes anything on the other side.
+
+### Managing files
+
+Each pane has a toolbar under its path, and the same actions on the right-click menu of a
+row (right-clicking a row that is not selected selects it first). The keys act on the pane
+you clicked last, never while you are typing in a field.
+
+| Action | Toolbar / menu | Key | What it does |
+|---|---|---|---|
+| New folder | **Folder** | F7 | Asks for a name and creates the folder in the pane's folder; it is selected afterwards. |
+| New file | **File** | | Creates an empty file. |
+| Rename | **Rename** | F2 | One selected item, in the same folder. An existing name is never replaced. |
+| Delete | **Delete** | Del | The selected items, folders with everything in them. |
+| Properties | **Properties** | | One selected item: full path, type, size (for a folder: what is inside), modified time, permissions and owner. |
+| Permissions | **Permissions** (host side only) | | See below. |
+| Copy path | **Path** / **Copy path** | | The full paths of the selection (one per line), or the folder's path when nothing is selected. |
+
+- **Names**: a name is one part of a path. Empty names, `.`, `..`, `/`, control characters
+  and leading or trailing spaces are refused (on Windows also `\ < > : " | ? *` and a final
+  dot). The reason appears in the dialog, which stays open so you can fix the name; so does
+  *… already exists*.
+- **Delete** asks once, listing every item with its size; for a folder it counts what is
+  inside (*2.4 MiB in 12 file(s) and 3 subfolder(s)*), then shows the total. It says that the
+  delete cannot be undone: the host has no recycle bin, and on this computer the files are
+  deleted, not moved to the Recycle Bin. Links are removed themselves; what they point to
+  is never touched.
+- **Permissions…** (host side, one or more items): the current mode as checkboxes (owner /
+  group / others × read / write / execute) and as an octal number (`644`, `2775`); either
+  one updates the other. **Also everything inside the folders** applies it to what is
+  inside too: folders get the mode plus *x* wherever *r* is set (so they stay openable),
+  files get its read / write bits, keep *x* only if they already had it, and never get
+  setuid / setgid / sticky. Links are not changed. The permissions column shows setuid /
+  setgid / sticky as `s` / `t`, like `ls -l`.
+- **Errors**: when some items cannot be deleted or changed (for example *Permission
+  denied*), the others are still done and a red list at the top of the window names each
+  failed item; **Dismiss** hides it.
+- Telepad never uses `sudo` here: only what the login user may change is changed.
+- On a host **without SFTP** the host side's actions are disabled (*Needs SFTP on the
+  host*); copying and this computer's side still work.
 
 ## Public keys (add / revoke)
 

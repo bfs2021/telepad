@@ -1,13 +1,15 @@
-//! File windows (#62): one per host, the local computer on the left and the
-//! host on the right, with a transfer queue. Pure state and update logic;
-//! the runtime does the listing and copying.
+//! File windows (#62, #63): one per host, the local computer on the left and
+//! the host on the right, with a transfer queue and file operations (new,
+//! rename, delete, permissions, properties). Pure state and update logic; the
+//! runtime does the listing, copying and changing.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::Instant;
 
 use telepad_core::config::HostEntry;
+use telepad_core::files::ops::{Measure, Report, check_name};
 use telepad_core::files::transfer::{Decision, Direction, Event, Item, Source};
-use telepad_core::files::{Entry, local_join, local_parent, sftp};
+use telepad_core::files::{Entry, Kind, local_join, local_parent, sftp};
 
 pub type FmId = u64;
 
@@ -137,6 +139,91 @@ pub struct Ask {
     pub at: usize,
 }
 
+/// A file operation the user asked for (toolbar, right-click menu, keys).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpKind {
+    /// F7
+    NewFolder,
+    NewFile,
+    /// F2 (one selected item)
+    Rename,
+    /// Del (selected items)
+    Delete,
+    /// One selected item: size, dates, permissions, owner.
+    Properties,
+    /// Host side only: mode of the selected items.
+    Permissions,
+}
+
+/// The dialog open in a file window.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DialogKind {
+    NewFolder,
+    NewFile,
+    Rename {
+        from: String,
+    },
+    /// Asks once for all items; `measure`: files / bytes inside each (while
+    /// `None` the sizes are being counted).
+    Delete {
+        items: Vec<Entry>,
+        measure: Option<Result<Vec<Measure>, String>>,
+    },
+    Properties {
+        item: Entry,
+        path: String,
+        measure: Option<Result<Measure, String>>,
+    },
+    Permissions {
+        items: Vec<Entry>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Dialog {
+    pub side: Side,
+    /// Folder the items are in.
+    pub dir: String,
+    pub kind: DialogKind,
+    /// Why the last attempt failed (the dialog stays open).
+    pub error: Option<String>,
+    /// Waiting for the runtime.
+    pub busy: bool,
+}
+
+/// Work for the runtime (both sides; the host side over SFTP).
+#[derive(Debug, Clone, PartialEq)]
+pub enum FileOp {
+    NewFolder {
+        dir: String,
+        name: String,
+    },
+    NewFile {
+        dir: String,
+        name: String,
+    },
+    Rename {
+        dir: String,
+        from: String,
+        to: String,
+    },
+    Delete {
+        dir: String,
+        items: Vec<Entry>,
+    },
+    Chmod {
+        dir: String,
+        items: Vec<Entry>,
+        mode: u32,
+        recursive: bool,
+    },
+    /// Files / bytes inside → [`FmMsg::Measured`].
+    Measure {
+        dir: String,
+        items: Vec<Entry>,
+    },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Status {
     #[default]
@@ -159,6 +246,9 @@ pub struct FileSession {
     pub ask: Option<Ask>,
     /// rsync usable on both sides (else why not); `None` while checking.
     pub rsync: Option<Result<(), String>>,
+    pub dialog: Option<Dialog>,
+    /// Errors of the last delete / permission change (one line per item).
+    pub op_errors: Vec<String>,
     next_transfer: u64,
 }
 
@@ -198,6 +288,13 @@ pub struct FileDraft {
     pub use_rsync: bool,
     /// "Apply to all" in the overwrite question.
     pub apply_all: bool,
+    /// Name field of New folder / New file / Rename.
+    pub name: String,
+    /// Permissions dialog: mode bits and the octal text bound to them.
+    pub mode: u32,
+    pub mode_text: String,
+    /// Permissions dialog: also everything inside folders.
+    pub recursive: bool,
 }
 
 impl FileDraft {
@@ -317,6 +414,32 @@ pub enum FmMsg {
         id: FmId,
         transfer: u64,
     },
+    /// Open the dialog of an operation for the selection of `side`.
+    Ask {
+        id: FmId,
+        side: Side,
+        op: OpKind,
+    },
+    /// Do what the open dialog says (name / mode from the draft).
+    Confirm(FmId),
+    CloseDialog(FmId),
+    Measured {
+        id: FmId,
+        side: Side,
+        result: Result<Vec<Measure>, String>,
+    },
+    /// An operation finished: `Ok` with what it did (and the name to select).
+    OpDone {
+        id: FmId,
+        side: Side,
+        result: Result<(Report, Option<String>), String>,
+    },
+    /// Copy the full paths of the selection (or of the folder) to the clipboard.
+    CopyPath {
+        id: FmId,
+        side: Side,
+    },
+    DismissErrors(FmId),
 }
 
 #[derive(Debug, Clone)]
@@ -377,6 +500,13 @@ pub enum FmEffect {
         local: String,
         remote: String,
     },
+    /// → [`FmMsg::OpDone`] (or [`FmMsg::Measured`] for a measure).
+    Op {
+        id: FmId,
+        side: Side,
+        op: FileOp,
+    },
+    CopyText(String),
 }
 
 fn list(fx: &mut Vec<FmEffect>, s: &mut FileSession, d: &mut FileDraft, side: Side, path: String) {
@@ -853,6 +983,65 @@ pub fn update(
                 };
             }
         }
+        FmMsg::Ask { side, op, .. } => ask(s, d, side, op, &mut fx),
+        FmMsg::Confirm(_) => confirm(s, d, &mut fx),
+        FmMsg::CloseDialog(_) => s.dialog = None,
+        FmMsg::Measured { side, result, .. } => {
+            if let Some(dl) = s.dialog.as_mut()
+                && dl.side == side
+            {
+                match &mut dl.kind {
+                    DialogKind::Delete { measure, .. } => *measure = Some(result),
+                    DialogKind::Properties { measure, .. } => {
+                        *measure = Some(result.and_then(|v| {
+                            v.into_iter()
+                                .next()
+                                .ok_or_else(|| "nothing measured".to_string())
+                        }))
+                    }
+                    _ => {}
+                }
+            }
+        }
+        FmMsg::OpDone { side, result, .. } => {
+            let path = s.pane(side).path.clone();
+            match result {
+                Ok((report, select)) => {
+                    s.dialog = None;
+                    s.op_errors = report.errors;
+                    let sel = d.selected_mut(side);
+                    sel.clear();
+                    if let Some(n) = select {
+                        sel.insert(n);
+                    }
+                    list(&mut fx, s, d, side, path);
+                }
+                Err(e) => match s.dialog.as_mut() {
+                    // New / Rename: say why and let the user try another name.
+                    Some(dl) if dl.side == side => {
+                        dl.busy = false;
+                        dl.error = Some(e);
+                    }
+                    _ => s.op_errors = vec![e],
+                },
+            }
+        }
+        FmMsg::CopyPath { side, .. } => {
+            let p = s.pane(side);
+            let sel = d.selected(side);
+            let text = if sel.is_empty() {
+                p.path.clone()
+            } else {
+                sel.iter()
+                    .map(|n| join(side, &p.path, n))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
+            if !text.is_empty() {
+                fx.push(FmEffect::CopyText(text));
+            }
+        }
+        FmMsg::DismissErrors(_) => s.op_errors.clear(),
         FmMsg::RsyncRun { transfer, .. } => {
             if let Some(t) = s.transfer_mut(transfer)
                 && matches!(t.state, TState::Previewed(_))
@@ -871,6 +1060,196 @@ pub fn update(
         }
     }
     fx
+}
+
+/// Why `op` cannot run on `side` now (with `sel` items selected), if it cannot.
+pub fn op_blocked(s: &FileSession, sel: usize, side: Side, op: OpKind) -> Option<&'static str> {
+    if s.status != Status::Ready {
+        return Some("Not connected");
+    }
+    if side == Side::Remote && s.mode == Mode::Fallback {
+        return Some("Needs SFTP on the host");
+    }
+    if s.dialog.is_some() {
+        return Some("Another dialog is open");
+    }
+    match op {
+        OpKind::NewFolder | OpKind::NewFile => None,
+        OpKind::Rename | OpKind::Properties if sel != 1 => Some("Select one item"),
+        OpKind::Delete if sel == 0 => Some("Select items first"),
+        OpKind::Permissions if side == Side::Local => Some("Host side only"),
+        OpKind::Permissions if sel == 0 => Some("Select items first"),
+        _ => None,
+    }
+}
+
+fn selected_entries(s: &FileSession, d: &FileDraft, side: Side) -> Vec<Entry> {
+    let sel = d.selected(side);
+    s.pane(side)
+        .entries
+        .iter()
+        .filter(|e| sel.contains(&e.name))
+        .cloned()
+        .collect()
+}
+
+fn measure_op(fx: &mut Vec<FmEffect>, id: FmId, side: Side, dir: &str, items: &[Entry]) {
+    fx.push(FmEffect::Op {
+        id,
+        side,
+        op: FileOp::Measure {
+            dir: dir.to_string(),
+            items: items.to_vec(),
+        },
+    });
+}
+
+fn file_measure(e: &Entry) -> Measure {
+    Measure {
+        files: 1,
+        bytes: e.size,
+        ..Default::default()
+    }
+}
+
+fn ask(s: &mut FileSession, d: &mut FileDraft, side: Side, op: OpKind, fx: &mut Vec<FmEffect>) {
+    let items = selected_entries(s, d, side);
+    if op_blocked(s, items.len(), side, op).is_some() {
+        return;
+    }
+    let id = s.id;
+    let dir = s.pane(side).path.clone();
+    d.active = Some(side);
+    let kind = match op {
+        OpKind::NewFolder => {
+            d.name.clear();
+            DialogKind::NewFolder
+        }
+        OpKind::NewFile => {
+            d.name.clear();
+            DialogKind::NewFile
+        }
+        OpKind::Rename => {
+            d.name = items[0].name.clone();
+            DialogKind::Rename {
+                from: items[0].name.clone(),
+            }
+        }
+        OpKind::Delete => {
+            // Folders are counted on the worker; files are known already.
+            let measure = if items.iter().any(|e| e.kind == Kind::Dir) {
+                measure_op(fx, id, side, &dir, &items);
+                None
+            } else {
+                Some(Ok(items.iter().map(file_measure).collect()))
+            };
+            DialogKind::Delete { items, measure }
+        }
+        OpKind::Properties => {
+            let item = items[0].clone();
+            let measure = if item.kind == Kind::Dir {
+                measure_op(fx, id, side, &dir, std::slice::from_ref(&item));
+                None
+            } else {
+                Some(Ok(file_measure(&item)))
+            };
+            DialogKind::Properties {
+                path: join(side, &dir, &item.name),
+                item,
+                measure,
+            }
+        }
+        OpKind::Permissions => {
+            d.mode = items.iter().find_map(|e| e.perm).unwrap_or(0o644) & 0o7777;
+            d.mode_text = format!("{:o}", d.mode);
+            d.recursive = false;
+            DialogKind::Permissions { items }
+        }
+    };
+    s.op_errors.clear();
+    s.dialog = Some(Dialog {
+        side,
+        dir,
+        kind,
+        error: None,
+        busy: false,
+    });
+}
+
+/// Octal mode typed by the user (`644`, `0755`, `2775`).
+pub fn parse_mode(text: &str) -> Option<u32> {
+    let t = text.trim();
+    if t.is_empty() || t.len() > 5 {
+        return None;
+    }
+    u32::from_str_radix(t, 8).ok().filter(|m| *m <= 0o7777)
+}
+
+fn confirm(s: &mut FileSession, d: &FileDraft, fx: &mut Vec<FmEffect>) {
+    let id = s.id;
+    let Some(dl) = s.dialog.as_mut() else {
+        return;
+    };
+    if dl.busy {
+        return;
+    }
+    let local = dl.side == Side::Local;
+    let name = d.name.clone();
+    let name_ok = |dl: &mut Dialog| match check_name(&name, local) {
+        Ok(()) => true,
+        Err(e) => {
+            dl.error = Some(e);
+            false
+        }
+    };
+    let dir = dl.dir.clone();
+    let op = match dl.kind.clone() {
+        DialogKind::NewFolder => name_ok(dl).then(|| FileOp::NewFolder {
+            dir,
+            name: name.clone(),
+        }),
+        DialogKind::NewFile => name_ok(dl).then(|| FileOp::NewFile {
+            dir,
+            name: name.clone(),
+        }),
+        DialogKind::Rename { from } => {
+            if from == name {
+                s.dialog = None;
+                return;
+            }
+            name_ok(dl).then(|| FileOp::Rename {
+                dir,
+                from,
+                to: name.clone(),
+            })
+        }
+        DialogKind::Delete { items, .. } => Some(FileOp::Delete { dir, items }),
+        DialogKind::Permissions { items } => match parse_mode(&d.mode_text) {
+            Some(mode) => Some(FileOp::Chmod {
+                dir,
+                items,
+                mode,
+                recursive: d.recursive,
+            }),
+            None => {
+                dl.error = Some("Permissions are 3 or 4 octal digits, for example 644".into());
+                None
+            }
+        },
+        DialogKind::Properties { .. } => {
+            s.dialog = None;
+            return;
+        }
+    };
+    if let Some(op) = op {
+        dl.error = None;
+        dl.busy = true;
+        fx.push(FmEffect::Op {
+            id,
+            side: dl.side,
+            op,
+        });
+    }
 }
 
 fn msg_id(m: &FmMsg) -> FmId {
@@ -893,7 +1272,12 @@ fn msg_id(m: &FmMsg) -> FmId {
         | Cancel { id, .. }
         | RsyncChecked { id, .. }
         | RsyncPreviewed { id, .. }
-        | RsyncRun { id, .. } => *id,
-        Retry(id) | Close(id) | AskCancel(id) | ClearFinished(id) => *id,
+        | RsyncRun { id, .. }
+        | Ask { id, .. }
+        | Measured { id, .. }
+        | OpDone { id, .. }
+        | CopyPath { id, .. } => *id,
+        Retry(id) | Close(id) | AskCancel(id) | ClearFinished(id) | Confirm(id)
+        | CloseDialog(id) | DismissErrors(id) => *id,
     }
 }

@@ -2,6 +2,31 @@
 
 Newest first.
 
+## [2026-11-20] — feat(files): file operations — new, rename, delete, permissions (#63)
+- Issue #63 addressed on GitHub (branch `63-file-operations`).
+- Core `files/ops.rs`: `Fs` trait (`LocalFs`, `Sftp`), `check_name` (one path element;
+  Windows-invalid characters locally), new folder / file (`Sftp::create_new`, exclusive),
+  rename (never replaces; case-only rename allowed on Windows / macOS), recursive delete and
+  measure (links removed, never followed; per-item errors; stops at 100 000 entries),
+  recursive chmod (contents before their folder; folders `dir_mode` = +x where r, files
+  `file_mode` = rw bits, x only if already executable, no setuid / setgid / sticky).
+  `perm_text` shows `s` / `t`.
+- App: `OpKind`, `Dialog` / `DialogKind`, `FileOp`, `op_blocked` (hosts without SFTP keep
+  their side read-only), `Ask` / `Confirm` / `Measured` / `OpDone` / `CopyPath`; 7 new
+  `update()` tests. Runtime: operations on the window's worker thread (reuses its SFTP
+  connection; stopped when the window closes); copy path via `arboard`.
+- GUI: toolbar per pane, right-click menu, F7 / F2 / Del (not while typing), dialogs for
+  new / rename / delete (item list, sizes, total, cannot-be-undone warning) / properties /
+  permissions (checkboxes + octal, recursive), red per-item error list with Dismiss.
+- Docs: USER_MANUAL "Managing files", README, SECURITY, AGENTS.
+- Verified: fmt, clippy, all tests; live SFTP test (unicode / quote names, `..`, exists,
+  recursive chmod incl. a mode without x, link not followed, delete); GUI on Windows 11
+  (second monitor) against the lab: new folder / file on both sides, F2 rename, duplicate
+  name error, right-click menu, permissions 2770 recursive (checked with `ls -l`),
+  multi-select delete with counts, per-item error (read-only folder), properties, copy
+  path, host without SFTP. Not verified here: the Unix-only local tests (links, chmod),
+  which run on Linux / macOS CI.
+
 ## [2026-11-19] — Telepad 0.8.3
 - Fixed: hosts with an option that takes several arguments (e.g. `LocalForward 30001
   127.0.0.1:30001`) broke every ssh connection with "Missing target argument" — the

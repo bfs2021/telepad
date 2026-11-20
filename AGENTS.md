@@ -52,7 +52,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 | `src/parse.rs` | Pure parsers for each section, unit-tested against `tests/fixtures/` |
 | `src/authorized_keys.rs` | Public keys window backend: validate a pasted key (type, base64, embedded type), SHA256 fingerprint, add/revoke script for `~/.ssh/authorized_keys`, lockout guard (`login_keys`), parallel `apply_all` |
 | `src/db/` | Database browser (#52–#54): `detect` (DB containers / host listeners → `DbTarget`, user from container env), `tunnel` (`ssh -N -L`, closed on drop and by `close_all` on exit), `client` (`Session`: MySQL `mysql` / PostgreSQL `postgres` drivers, metadata, pages, queries, transactional row edits, DDL, cancel; live tests via `TELEPAD_TEST_MYSQL` / `TELEPAD_TEST_PG`), `sql` (quoting, statement split, danger / read-only checks, row SQL), `ddl` (structure editor SQL), `secret` (OS password store) |
-| `src/files/` | File window (#62): `sftp` (own SFTP v3 client over `ssh -s <alias> sftp`: list, stat, pipelined download / upload, mkdir, rename, remove, setstat), `fallback` (hosts without SFTP: `sh` listing + `scp -O`), `rsync` (availability check, `-e ssh` args with `--protect-args`, dry run), `transfer` (`plan`: recursive walk + existing files, `run`: copy via `.telepad-part`, keep mtime), local listing helpers; live tests via `TELEPAD_TEST_SSH` (`tests/sshd/` lab image) |
+| `src/files/` | File window (#62): `sftp` (own SFTP v3 client over `ssh -s <alias> sftp`: list, stat, pipelined download / upload, mkdir, rename, remove, setstat), `fallback` (hosts without SFTP: `sh` listing + `scp -O`), `rsync` (availability check, `-e ssh` args with `--protect-args`, dry run), `transfer` (`plan`: recursive walk + existing files, `run`: copy via `.telepad-part`, keep mtime), `ops` (#63: `Fs` trait for `LocalFs` / `Sftp`, `check_name`, new folder / file, rename, recursive delete / chmod / measure, `dir_mode` / `file_mode`), local listing helpers; live tests via `TELEPAD_TEST_SSH` (`tests/sshd/` lab image) |
 | `src/docker_actions.rs` | Docker/compose action commands + terminal script (show, confirm, run), read-only "How it runs" (`docker inspect` → `docker run`, compose files, secrets masked) |
 | `src/cluster.rs` | Docker Swarm (managers) and Kubernetes (kubectl / k3s / microk8s) model + parsers for `===SWARM===` / `===KUBE===`; cluster key so several managers show one cluster |
 | `src/hostsync.rs` | Host Management (#58): block-preserving OpenSSH config model (`ConfigFile`: managed single-alias blocks vs kept text), `compare` (rows by alias), `apply` (upsert / delete blocks, new hosts before `Host *` / `Match`), `line_diff`, `write` (only if unchanged since loading; timestamped `.bak`, atomic, permissions kept) |
@@ -73,7 +73,7 @@ telepad-gui ──► telepad-app ──► telepad-core ◄── telepad-check
 | `src/tests_hostsync.rs` | Behaviour tests for Host Management |
 | `src/db.rs` | Database windows: `DbSession` (model), `DbDraft` (form fields), `DbMsg` / `DbEffect` / `DbJob`, `update` for them, `post_statements` (grid edits → SQL) |
 | `src/tests.rs` | Behaviour tests for `update()` (no GUI, no database, no network) |
-| `src/files.rs` | File windows: `FileSession` (model: panes, transfers, overwrite question), `FileDraft` (paths, filters, selection, rsync toggle), `FmMsg` / `FmEffect`, `update` |
+| `src/files.rs` | File windows: `FileSession` (model: panes, transfers, overwrite question, operation `Dialog`, `op_errors`), `FileDraft` (paths, filters, selection, rsync toggle, dialog name / mode), `FmMsg` / `FmEffect` / `FileOp`, `op_blocked`, `update` |
 | `src/tests_files.rs` | Behaviour tests for the file windows |
 | `src/tests_db.rs` | Behaviour tests for the database windows |
 
@@ -142,7 +142,9 @@ in `update()` with a test → run the effect in `runtime.rs` → draw/emit it in
   login's SFTP subsystem (fallback `scp -O`; rsync with a dry run first, no `--delete`); never
   `sudo`. Existing files are replaced only after Overwrite / Newer only; writes go to
   `<name>.telepad-part` and are renamed when complete; uploads never send Windows modes
-  (`scp` without `-p`).
+  (`scp` without `-p`). File operations (#63, `files/ops.rs`): new folder / file, rename,
+  delete, permissions only from the window's dialogs (delete confirmed with the item list);
+  names checked as one path element, renames never replace, links never followed.
 - Remote script: POSIX `sh`, BusyBox-safe, every command guarded, `LC_ALL=C`.
 - New metric = new section in `script.sh` + parser + fixture test (core) + view.
 - OS-specific code only in `telepad-core/src/platform.rs` behind `#[cfg(target_os = ...)]`.
@@ -235,5 +237,5 @@ the updater sets the execute bit on `telepad-check` (`platform::make_executable`
 | #54 | feat(db): edit table structure — columns, indexes, foreign keys | closed | 2026-11-19 |
 | #58 | feat(hosts): Host Management window — compare and sync Telepad hosts with an OpenSSH config | closed | 2026-11-19 |
 | #62 | feat(files): WinSCP-style file window — local and remote panes with transfers | closed | 2026-11-19 |
-| #63 | feat(files): file operations — new, rename, delete, permissions | open | 2026-11-19 |
+| #63 | feat(files): file operations — new, rename, delete, permissions | ready-for-review | 2026-11-20 |
 | #64 | feat(files): built-in VS Code-like editor for local and remote files | open | 2026-11-19 |
